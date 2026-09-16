@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">闲置守护</string>
+    <string name="accessibility_service_label">闲置守护（无障碍）</string>
+    <string name="accessibility_service_description">用于检测用户交互（触摸/滚动/输入）以重置闲置计时，并在闲置达到设定时长时执行"回到桌面"这一动作。本应用不会读取窗口内容。</string>
+
+    <!-- Notification -->
+    <string name="notif_channel_name">闲置守护服务</string>
+    <string name="notif_title">闲置守护运行中</string>
+    <string name="notif_monitoring">闲置 %1$d 分钟后自动息屏并静音</string>
+    <string name="notif_asleep">已息屏，等你回来将自动恢复</string>
+
+    <!-- UI section headers -->
+    <string name="section_settings">闲置设置</string>
+    <string name="section_permissions">权限授予</string>
+    <string name="section_test">测试</string>
+
+    <string name="label_enable">启用守护</string>
+    <string name="label_idle_minutes">闲置时长（分钟）</string>
+    <string name="hint_minutes">填 1 分钟到 1440 分钟之间</string>
+
+    <string name="perm_accessibility">无障碍服务</string>
+    <string name="perm_device_admin">设备管理器（用于锁屏）</string>
+    <string name="perm_dnd">勿扰权限（用于静音）</string>
+    <string name="perm_battery">忽略电池优化</string>
+
+    <string name="btn_grant">去授予</string>
+    <string name="btn_ignore_battery">去设置</string>
+    <string name="btn_test_trigger">立即测试触发</string>
+
+    <string name="device_admin_rationale">闲置守护需要设备管理员权限，以便在闲置达到你设定的时长后自动锁屏（息屏）。</string>
+    <string name="row_auto_start_hint">国产 ROM 请在系统"自启动管理"中允许闲置守护自启动，避免被杀后台。</string>
+
+    <string name="status_line">%1$s  %2$s</string>
+
+    <string name="toast_missing_perms">请先授予：%1$s</string>
+    <string name="toast_cant_open_settings">无法跳转到系统设置，请手动前往。</string>
+    <string name="toast_test_triggered">已按当前状态执行一次触发（HOME + 静音 + 息屏）。</string>
+</resources>
