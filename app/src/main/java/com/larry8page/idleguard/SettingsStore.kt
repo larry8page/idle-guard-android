@@ -13,12 +13,8 @@ object SettingsStore {
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    var Context.enabled: Boolean
-        get() = prefs(this).getBoolean(KEY_ENABLED, false)
-        set(value) = prefs(this).edit().putBoolean(KEY_ENABLED, value).apply()
-
-    fun isEnabled(ctx: Context): Boolean = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        .getBoolean(KEY_ENABLED, false)
+    fun isEnabled(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_ENABLED, false)
 
     fun setEnabled(ctx: Context, v: Boolean) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, v).apply()
