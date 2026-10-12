@@ -23,11 +23,13 @@ class IdleAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        event ?: return
+        val ev = event ?: return
         // Reset ONLY on genuine user input.
-        val fromPointer = (event.source and
-            (InputDevice.SOURCE_TOUCHSCREEN or InputDevice.SOURCE_MOUSE or InputDevice.SOURCE_STYLUS)) != 0
-        when (event.eventType) {
+        val src: Int = ev.source
+        val pointerMask: Int =
+            InputDevice.SOURCE_TOUCHSCREEN or InputDevice.SOURCE_MOUSE or InputDevice.SOURCE_STYLUS
+        val fromPointer: Boolean = (src and pointerMask) != 0
+        when (ev.eventType) {
             // A click/long-click is by definition a user tap → always counts.
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_LONG_CLICKED ->
