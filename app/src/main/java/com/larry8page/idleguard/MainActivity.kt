@@ -106,6 +106,10 @@ class MainActivity : AppCompatActivity() {
                 openAppDetailsSettings()
             }
         }
+        b.btnGrantUsage.setOnClickListener {
+            runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                .onFailure { openAppDetailsSettings() }
+        }
         b.btnTestTrigger.setOnClickListener {
             Toast.makeText(this, R.string.toast_test_triggered, Toast.LENGTH_SHORT).show()
             ActionRunner.trigger(this)
@@ -171,6 +175,9 @@ class MainActivity : AppCompatActivity() {
         val exactOk = isExactAlarmGranted()
         b.statusExactAlarm.text = statusLine(getString(R.string.perm_exact_alarm), exactOk)
         b.btnGrantExactAlarm.visibility = if (exactOk) android.view.View.GONE else android.view.View.VISIBLE
+        val usageOk = ForegroundApp.isGranted(this)
+        b.statusUsage.text = statusLine(getString(R.string.perm_usage), usageOk)
+        b.btnGrantUsage.visibility = if (usageOk) android.view.View.GONE else android.view.View.VISIBLE
         b.rowAutoStartHint.visibility = if (SettingsStore.isEnabled(this)) android.view.View.VISIBLE else android.view.View.GONE
     }
 

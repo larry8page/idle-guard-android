@@ -172,6 +172,20 @@
             android:layout_height="wrap_content"
             android:text="@string/btn_grant" />
 
+        <TextView
+            android:id="@+id/statusUsage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/perm_usage" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGrantUsage"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_grant" />
+
         <!-- ====== 测试区 ====== -->
         <TextView
             android:layout_width="wrap_content"

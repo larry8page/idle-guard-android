@@ -26,6 +26,7 @@
     <string name="perm_dnd">勿扰权限（用于静音）</string>
     <string name="perm_battery">忽略电池优化</string>
     <string name="perm_exact_alarm">精准闹钟（保证到点触发）</string>
+    <string name="perm_usage">使用情况访问（识别前台App，清理用）</string>
 
     <string name="btn_grant">去授予</string>
     <string name="btn_ignore_battery">去设置</string>
@@ -38,5 +39,5 @@
 
     <string name="toast_missing_perms">请先授予：%1$s</string>
     <string name="toast_cant_open_settings">无法跳转到系统设置，请手动前往。</string>
-    <string name="toast_test_triggered">已按当前状态执行一次触发（HOME + 静音 + 息屏）。</string>
+    <string name="toast_test_triggered">已执行一次触发：回桌面 + 静音 → 清理前台App → 锁屏。</string>
 </resources>
