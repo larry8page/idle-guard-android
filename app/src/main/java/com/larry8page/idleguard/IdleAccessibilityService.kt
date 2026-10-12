@@ -1,6 +1,7 @@
 package com.larry8page.idleguard
 
 import android.accessibilityservice.AccessibilityService
+import android.view.InputDevice
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -23,15 +24,20 @@ class IdleAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        // Reset ONLY on genuine user input. Deliberately excludes text-change events:
-        // a ticking home-screen clock or an updating notification fires TYPE_VIEW_TEXT_CHANGED
-        // with no user interaction, which would perpetually reset the idle timer.
+        // Reset ONLY on genuine user input.
+        val fromPointer = (event.source and
+            (InputDevice.SOURCE_TOUCHSCREEN or InputDevice.SOURCE_MOUSE or InputDevice.SOURCE_STYLUS)) != 0
         when (event.eventType) {
+            // A click/long-click is by definition a user tap → always counts.
             AccessibilityEvent.TYPE_VIEW_CLICKED,
-            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED ->
+                IdleGuardService.instance?.onUserActivity()
+
+            // Scrolls/hovers can be synthesized by auto-playing carousels & auto-pagers
+            // in the foreground app. Only count them when they came from a real pointer.
             AccessibilityEvent.TYPE_VIEW_SCROLLED,
             AccessibilityEvent.TYPE_VIEW_HOVER_ENTER -> {
-                IdleGuardService.instance?.onUserActivity()
+                if (fromPointer) IdleGuardService.instance?.onUserActivity()
             }
         }
     }
