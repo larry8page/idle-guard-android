@@ -15,7 +15,7 @@ class IdleAlarmReceiver : BroadcastReceiver() {
             svc.onIdleFired()
         } else {
             Logger.log(ctx, "定时广播到达，服务未运行 → 直接执行触发")
-            ActionRunner.trigger(ctx)
+            ActionRunner.runSequenceNow(ctx)
         }
     }
 }

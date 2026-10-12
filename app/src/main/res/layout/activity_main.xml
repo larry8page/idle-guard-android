@@ -20,7 +20,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="“闲置”＝这段时间内没有任何触屏操作。闲置达到设定时长后，自动执行：回到桌面 + 勿扰静音 + 息屏锁屏"
+            android:text="@string/header_subtitle"
             android:textAppearance="?attr/textAppearanceBodyMedium" />
 
         <!-- ====== 设置区 ====== -->
@@ -69,7 +69,35 @@
                 android:layout_height="wrap_content"
                 android:gravity="end"
                 android:inputType="number"
-                android:text="15" />
+                android:text="5" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="分钟" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/label_countdown" />
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editCountdown"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:inputType="number"
+                android:text="0" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -82,7 +110,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="@string/hint_minutes"
+            android:text="@string/hint_countdown"
             android:textAppearance="?attr/textAppearanceBodySmall" />
 
         <TextView
@@ -131,18 +159,24 @@
             android:text="@string/btn_grant" />
 
         <TextView
-            android:id="@+id/statusDnd"
+            android:id="@+id/statusDeviceOwner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/perm_dnd" />
+            android:text="@string/perm_device_owner" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/device_owner_hint"
+            android:textAppearance="?attr/textAppearanceBodySmall" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnGrantDnd"
+            android:id="@+id/btnCopyDoCmd"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/btn_grant" />
+            android:text="@string/btn_copy_docmd" />
 
         <TextView
             android:id="@+id/statusBattery"

@@ -2,9 +2,10 @@ package com.larry8page.idleguard
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.app.Activity
 import android.app.AlarmManager
 import android.app.admin.DevicePolicyManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -37,6 +38,8 @@ class MainActivity : AppCompatActivity() {
 
         b.editMinutes.keyListener = DigitsKeyListener.getInstance("0123456789")
         b.editMinutes.setText(SettingsStore.idleMinutes(this).toString())
+        b.editCountdown.keyListener = DigitsKeyListener.getInstance("0123456789")
+        b.editCountdown.setText(SettingsStore.countdownMinutes(this).toString())
         b.switchEnabled.isChecked = SettingsStore.isEnabled(this)
 
         b.switchEnabled.setOnCheckedChangeListener { _, checked ->
@@ -58,6 +61,7 @@ class MainActivity : AppCompatActivity() {
                 SettingsStore.setEnabled(this, false)
                 IdleGuardService.stop(this)
                 TimerScheduler.cancel(this)
+                KillScheduler.cancel(this)
             }
         }
 
@@ -67,6 +71,14 @@ class MainActivity : AppCompatActivity() {
             if (clamped != v) b.editMinutes.setText(clamped.toString())
             SettingsStore.setIdleMinutes(this, clamped)
             IdleGuardService.instance?.onUserActivity()
+        }
+
+        b.editCountdown.doAfterTextChanged { et ->
+            val v = et?.toString()?.toIntOrNull() ?: return@doAfterTextChanged
+            val clamped = v.coerceIn(0, SettingsStore.MAX_IDLE_MIN)
+            if (clamped != v) b.editCountdown.setText(clamped.toString())
+            SettingsStore.setCountdownMinutes(this, clamped)
+            IdleGuardService.instance?.onCountdownSettingChanged()
         }
 
         b.btnGrantAccessibility.setOnClickListener {
@@ -85,9 +97,12 @@ class MainActivity : AppCompatActivity() {
             )
             runCatching { startActivity(i) }.onFailure { toastCantOpen() }
         }
-        b.btnGrantDnd.setOnClickListener {
-            runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
-                .onFailure { toastCantOpen() }
+        b.btnCopyDoCmd.setOnClickListener {
+            val cmd = "adb shell dpm set-device-owner " +
+                "$packageName/${IdleGuardDeviceAdminReceiver::class.java.name}"
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("dpm", cmd))
+            Toast.makeText(this, R.string.toast_cmd_copied, Toast.LENGTH_LONG).show()
         }
         b.btnIgnoreBattery.setOnClickListener {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
@@ -112,7 +127,7 @@ class MainActivity : AppCompatActivity() {
         }
         b.btnTestTrigger.setOnClickListener {
             Toast.makeText(this, R.string.toast_test_triggered, Toast.LENGTH_SHORT).show()
-            ActionRunner.trigger(this)
+            ActionRunner.runSequenceNow(this)
         }
         b.btnOpenAutoStart.setOnClickListener {
             startActivity(Intent(this, AutoStartGuideActivity::class.java))
@@ -143,9 +158,9 @@ class MainActivity : AppCompatActivity() {
         return dpm.isAdminActive(ComponentName(this, IdleGuardDeviceAdminReceiver::class.java))
     }
 
-    private fun isDndGranted(): Boolean {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        return runCatching { nm.isNotificationPolicyAccessGranted }.getOrDefault(false)
+    private fun isDeviceOwner(): Boolean {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        return runCatching { dpm.isDeviceOwnerApp(packageName) }.getOrDefault(false)
     }
 
     private fun isIgnoringBattery(): Boolean {
@@ -162,15 +177,16 @@ class MainActivity : AppCompatActivity() {
     private fun missingPermissions(): List<String> {
         val out = mutableListOf<String>()
         if (!isAccessibilityEnabled()) out += getString(R.string.perm_accessibility)
-        if (!isDeviceAdminActive()) out += getString(R.string.perm_device_admin)
-        if (!isDndGranted()) out += getString(R.string.perm_dnd)
+        if (!isDeviceAdminActive() && !isDeviceOwner()) out += getString(R.string.perm_device_admin)
         return out
     }
 
     private fun refreshPermissionUi() {
         b.statusAccessibility.text = statusLine(getString(R.string.perm_accessibility), isAccessibilityEnabled())
         b.statusDeviceAdmin.text = statusLine(getString(R.string.perm_device_admin), isDeviceAdminActive())
-        b.statusDnd.text = statusLine(getString(R.string.perm_dnd), isDndGranted())
+        val owner = isDeviceOwner()
+        b.statusDeviceOwner.text = statusLine(getString(R.string.perm_device_owner), owner)
+        b.btnCopyDoCmd.visibility = if (owner) android.view.View.GONE else android.view.View.VISIBLE
         b.statusBattery.text = statusLine(getString(R.string.perm_battery), isIgnoringBattery())
         val exactOk = isExactAlarmGranted()
         b.statusExactAlarm.text = statusLine(getString(R.string.perm_exact_alarm), exactOk)

@@ -7,7 +7,9 @@ object SettingsStore {
     private const val PREFS = "idle_guard_prefs"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_IDLE_MIN = "idle_minutes"
+    private const val KEY_COUNTDOWN_MIN = "countdown_minutes"
     const val DEFAULT_IDLE_MIN = 5
+    const val DEFAULT_COUNTDOWN_MIN = 0
     const val MAX_IDLE_MIN = 24 * 60
 
     private fun prefs(ctx: Context) =
@@ -17,18 +19,25 @@ object SettingsStore {
         prefs(ctx).getBoolean(KEY_ENABLED, false)
 
     fun setEnabled(ctx: Context, v: Boolean) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, v).apply()
+        prefs(ctx).edit().putBoolean(KEY_ENABLED, v).apply()
     }
 
     fun idleMinutes(ctx: Context): Int =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_IDLE_MIN, DEFAULT_IDLE_MIN)
-            .coerceIn(1, MAX_IDLE_MIN)
+        prefs(ctx).getInt(KEY_IDLE_MIN, DEFAULT_IDLE_MIN).coerceIn(1, MAX_IDLE_MIN)
 
     fun setIdleMinutes(ctx: Context, m: Int) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_IDLE_MIN, m.coerceIn(1, MAX_IDLE_MIN)).apply()
+        prefs(ctx).edit().putInt(KEY_IDLE_MIN, m.coerceIn(1, MAX_IDLE_MIN)).apply()
     }
 
     fun idleMillis(ctx: Context): Long = idleMinutes(ctx) * 60_000L
+
+    /** Second-stage grace: minutes to wait after going HOME before kill+lock. 0 = off. */
+    fun countdownMinutes(ctx: Context): Int =
+        prefs(ctx).getInt(KEY_COUNTDOWN_MIN, DEFAULT_COUNTDOWN_MIN).coerceIn(0, MAX_IDLE_MIN)
+
+    fun setCountdownMinutes(ctx: Context, m: Int) {
+        prefs(ctx).edit().putInt(KEY_COUNTDOWN_MIN, m.coerceIn(0, MAX_IDLE_MIN)).apply()
+    }
+
+    fun countdownMillis(ctx: Context): Long = countdownMinutes(ctx) * 60_000L
 }
