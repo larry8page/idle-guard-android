@@ -23,12 +23,13 @@ class IdleAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        // Reset ONLY on genuine user input. Deliberately excludes text-change events:
+        // a ticking home-screen clock or an updating notification fires TYPE_VIEW_TEXT_CHANGED
+        // with no user interaction, which would perpetually reset the idle timer.
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
             AccessibilityEvent.TYPE_VIEW_SCROLLED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
             AccessibilityEvent.TYPE_VIEW_HOVER_ENTER -> {
                 IdleGuardService.instance?.onUserActivity()
             }

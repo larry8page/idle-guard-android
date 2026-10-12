@@ -23,6 +23,7 @@
     <string name="perm_device_admin">设备管理器（用于锁屏）</string>
     <string name="perm_dnd">勿扰权限（用于静音）</string>
     <string name="perm_battery">忽略电池优化</string>
+    <string name="perm_exact_alarm">精准闹钟（保证到点触发）</string>
 
     <string name="btn_grant">去授予</string>
     <string name="btn_ignore_battery">去设置</string>

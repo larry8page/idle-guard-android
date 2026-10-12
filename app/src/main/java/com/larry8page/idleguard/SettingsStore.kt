@@ -7,7 +7,7 @@ object SettingsStore {
     private const val PREFS = "idle_guard_prefs"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_IDLE_MIN = "idle_minutes"
-    const val DEFAULT_IDLE_MIN = 15
+    const val DEFAULT_IDLE_MIN = 5
     const val MAX_IDLE_MIN = 24 * 60
 
     private fun prefs(ctx: Context) =

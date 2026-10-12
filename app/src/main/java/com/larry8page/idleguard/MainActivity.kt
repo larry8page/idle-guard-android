@@ -3,6 +3,7 @@ package com.larry8page.idleguard
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
+import android.app.AlarmManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -96,6 +97,15 @@ class MainActivity : AppCompatActivity() {
                     .onFailure { toastCantOpen() }
             }
         }
+        b.btnGrantExactAlarm.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= 31) {
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                intent.data = Uri.parse("package:$packageName")
+                runCatching { startActivity(intent) }.onFailure { openAppDetailsSettings() }
+            } else {
+                openAppDetailsSettings()
+            }
+        }
         b.btnTestTrigger.setOnClickListener {
             Toast.makeText(this, R.string.toast_test_triggered, Toast.LENGTH_SHORT).show()
             ActionRunner.trigger(this)
@@ -133,6 +143,12 @@ class MainActivity : AppCompatActivity() {
         return runCatching { pm.isIgnoringBatteryOptimizations(packageName) }.getOrDefault(false)
     }
 
+    private fun isExactAlarmGranted(): Boolean {
+        if (Build.VERSION.SDK_INT < 31) return true // exact alarms always permitted pre-S
+        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return runCatching { am.canScheduleExactAlarms() }.getOrDefault(false)
+    }
+
     private fun missingPermissions(): List<String> {
         val out = mutableListOf<String>()
         if (!isAccessibilityEnabled()) out += getString(R.string.perm_accessibility)
@@ -146,6 +162,9 @@ class MainActivity : AppCompatActivity() {
         b.statusDeviceAdmin.text = statusLine(getString(R.string.perm_device_admin), isDeviceAdminActive())
         b.statusDnd.text = statusLine(getString(R.string.perm_dnd), isDndGranted())
         b.statusBattery.text = statusLine(getString(R.string.perm_battery), isIgnoringBattery())
+        val exactOk = isExactAlarmGranted()
+        b.statusExactAlarm.text = statusLine(getString(R.string.perm_exact_alarm), exactOk)
+        b.btnGrantExactAlarm.visibility = if (exactOk) android.view.View.GONE else android.view.View.VISIBLE
         b.rowAutoStartHint.visibility = if (SettingsStore.isEnabled(this)) android.view.View.VISIBLE else android.view.View.GONE
     }
 
@@ -154,6 +173,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun toastCantOpen() =
         Toast.makeText(this, R.string.toast_cant_open_settings, Toast.LENGTH_LONG).show()
+
+    private fun openAppDetailsSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        intent.data = Uri.parse("package:$packageName")
+        runCatching { startActivity(intent) }.onFailure { toastCantOpen() }
+    }
 
     private fun requestNotifPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= 33 &&
