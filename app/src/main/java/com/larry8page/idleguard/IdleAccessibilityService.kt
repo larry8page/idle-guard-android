@@ -25,7 +25,7 @@ class IdleAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val ev = event ?: return
         // Reset ONLY on genuine user input.
-        val src: Int = ev.source
+        val src: Int = ev.getSource()
         val pointerMask: Int =
             InputDevice.SOURCE_TOUCHSCREEN or InputDevice.SOURCE_MOUSE or InputDevice.SOURCE_STYLUS
         val fromPointer: Boolean = (src and pointerMask) != 0
