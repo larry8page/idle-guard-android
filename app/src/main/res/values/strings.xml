@@ -38,7 +38,7 @@
     <string name="btn_copy_docmd">复制开通命令</string>
 
     <string name="device_admin_rationale">闲置守护需要设备管理员权限，以便在触发后自动锁屏（息屏）。</string>
-    <string name="device_owner_hint">未开通只能做"轻量清理"，带前台服务的App（如视频）杀不掉。开通方法：手机开USB调试连电脑，复制命令执行，然后在手机上确认弹窗。注意：开通需手机上没有其他账户，且开通后只能再经adb移除。</string>
+    <string name="device_owner_hint">未开通只能做"轻量清理"，带前台服务的App（如视频）杀不掉。开通后触发时会把前台App直接隐藏（系统立即杀其进程），你回来解锁时自动恢复显示、数据无损。开通方法：手机开USB调试连电脑，复制命令执行，并在手机上确认弹窗。注意：开通要求手机上无其他账户，之后只能再经adb移除。</string>
     <string name="row_auto_start_hint">国产 ROM 请在系统"自启动管理"中允许闲置守护自启动，避免被杀后台。</string>
 
     <string name="status_line">%1$s  %2$s</string>

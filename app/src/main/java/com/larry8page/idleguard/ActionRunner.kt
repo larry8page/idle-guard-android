@@ -23,6 +23,8 @@ import android.os.Looper
 object ActionRunner {
     private const val KILL_DELAY_MS = 800L
     private const val LOCK_DELAY_MS = 1600L
+    private const val STATE_PREFS = "idle_guard_state"
+    private const val KEY_HIDDEN_PKG = "hidden_pkg"
 
     /** @return human-readable outcome of the HOME global action. */
     fun goHome(ctx: Context): String {
@@ -48,13 +50,31 @@ object ActionRunner {
             ForegroundApp.isNonTarget(app, pkg) -> "目标为系统/桌面，跳过（$pkg）"
             isOwner -> {
                 val admin = ComponentName(app, IdleGuardDeviceAdminReceiver::class.java)
-                val ok = runCatching { dpm.forceStopPackage(admin, pkg) }.isSuccess
-                if (ok) "已强停 $pkg" else lightKill(app, pkg) + "（forceStop异常，退回轻量清理）"
+                val ok = runCatching { dpm.setApplicationHidden(admin, pkg, true) }.getOrDefault(false)
+                if (ok) {
+                    app.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
+                        .putString(KEY_HIDDEN_PKG, pkg).apply()
+                    "已隐藏强停 $pkg（用户返回后自动恢复）"
+                } else {
+                    lightKill(app, pkg) + "（隐藏失败，退回轻量清理）"
+                }
             }
             else -> lightKill(app, pkg) + "（未配DeviceOwner，带前台服务的可能杀不掉）"
         }
         Logger.log(app, "清理前台 → $desc")
         return desc
+    }
+
+    /** Un-hides whatever killForeground hid, when the user comes back. */
+    fun restoreHidden(ctx: Context) {
+        val app = ctx.applicationContext
+        val sp = app.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val pkg = sp.getString(KEY_HIDDEN_PKG, null) ?: return
+        sp.edit().remove(KEY_HIDDEN_PKG).apply()
+        val dpm = app.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(app, IdleGuardDeviceAdminReceiver::class.java)
+        val ok = runCatching { dpm.setApplicationHidden(admin, pkg, false) }.getOrDefault(false)
+        Logger.log(app, "恢复显示 → $pkg ${if (ok) "OK" else "失败"}")
     }
 
     private fun lightKill(app: Context, pkg: String): String {

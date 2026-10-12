@@ -200,6 +200,7 @@ class IdleGuardService : Service() {
     private fun onUserReturned() {
         if (state == State.ASLEEP) {
             state = State.MONITORING
+            ActionRunner.restoreHidden(this)
             Logger.log(this, "用户返回 → 恢复监测")
             refreshNotification()
         }
