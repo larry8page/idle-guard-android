@@ -27,6 +27,7 @@ class IdleGuardService : Service() {
 
     @Volatile private var state: State = State.MONITORING
     private var screenReceiver: BroadcastReceiver? = null
+    private var lastResetLogMs: Long = 0L
 
     companion object {
         const val CHANNEL_ID = "idle_guard_service"
@@ -54,6 +55,7 @@ class IdleGuardService : Service() {
         ensureChannel()
         startForeground(NOTIF_ID, buildNotification())
         registerScreenReceiver()
+        Logger.log(this, "守护服务已启动")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,6 +78,11 @@ class IdleGuardService : Service() {
     fun onUserActivity() {
         if (state == State.ASLEEP) return
         rescheduleIfMonitoring()
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastResetLogMs > 60_000L) {
+            lastResetLogMs = now
+            Logger.log(this, "用户交互 → 计时已重置 (下次 ${SettingsStore.idleMinutes(this)} 分钟后触发)")
+        }
     }
 
     /** Called from IdleAlarmReceiver when the idle window elapses. */
@@ -108,6 +115,7 @@ class IdleGuardService : Service() {
             ActionRunner.restoreQuietMode(this)
             state = State.MONITORING
             refreshNotification()
+            Logger.log(this, "用户返回 → 恢复音量、重新计时")
         }
         rescheduleIfMonitoring()
     }

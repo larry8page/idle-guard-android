@@ -11,9 +11,10 @@ class IdleAlarmReceiver : BroadcastReceiver() {
         if (!SettingsStore.isEnabled(ctx)) return
         val svc = IdleGuardService.instance
         if (svc != null) {
+            Logger.log(ctx, "定时广播到达 → 交给守护服务处理")
             svc.onIdleFired()
         } else {
-            // Service not up (shouldn't happen if enabled). Fire the actions directly.
+            Logger.log(ctx, "定时广播到达，服务未运行 → 直接执行触发")
             ActionRunner.trigger(ctx)
         }
     }

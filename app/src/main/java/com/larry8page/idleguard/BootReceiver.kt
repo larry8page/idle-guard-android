@@ -12,7 +12,11 @@ class BootReceiver : BroadcastReceiver() {
         if (a != Intent.ACTION_BOOT_COMPLETED &&
             a != "android.intent.action.QUICKBOOT_POWERON" &&
             a != "com.htc.intent.action.QUICKBOOT_POWERON") return
-        if (!SettingsStore.isEnabled(ctx)) return
+        if (!SettingsStore.isEnabled(ctx)) {
+            Logger.log(ctx, "开机广播已收到 (守护未启用，跳过启动)")
+            return
+        }
+        Logger.log(ctx, "开机广播已收到 → 拉起守护服务")
         IdleGuardService.start(ctx)
     }
 }

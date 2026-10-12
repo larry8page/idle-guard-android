@@ -33,6 +33,18 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="@string/title_log"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".AutoStartGuideActivity"
+            android:exported="false"
+            android:label="@string/title_auto_start"
+            android:parentActivityName=".MainActivity" />
+
         <service
             android:name=".IdleGuardService"
             android:exported="false"

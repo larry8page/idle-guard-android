@@ -110,6 +110,12 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.toast_test_triggered, Toast.LENGTH_SHORT).show()
             ActionRunner.trigger(this)
         }
+        b.btnOpenAutoStart.setOnClickListener {
+            startActivity(Intent(this, AutoStartGuideActivity::class.java))
+        }
+        b.btnOpenLog.setOnClickListener {
+            startActivity(Intent(this, LogActivity::class.java))
+        }
     }
 
     override fun onResume() {

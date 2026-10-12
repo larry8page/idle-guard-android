@@ -20,7 +20,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="检测到系统闲置达到设定时长后，自动执行：回到桌面 + 勿扰静音 + 息屏锁屏"
+            android:text="“闲置”＝这段时间内没有任何触屏操作。闲置达到设定时长后，自动执行：回到桌面 + 勿扰静音 + 息屏锁屏"
             android:textAppearance="?attr/textAppearanceBodyMedium" />
 
         <!-- ====== 设置区 ====== -->
@@ -186,6 +186,30 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="@string/btn_test_trigger" />
+
+        <!-- ====== 更多 ====== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="更多"
+            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenAutoStart"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="自启动引导（防杀后台）" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenLog"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="触发日志" />
 
     </LinearLayout>
 </ScrollView>
