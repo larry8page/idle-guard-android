@@ -4,7 +4,6 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import java.util.SortedMap
 
 /**
  * Identifies the app that currently holds the foreground, using UsageStats
@@ -41,7 +40,7 @@ object ForegroundApp {
         return try {
             val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val now = System.currentTimeMillis()
-            val stats: SortedMap<String, UsageStats>? =
+            val stats: Map<String, UsageStats>? =
                 usm.queryAndAggregateUsageStats(now - 24 * 60 * 60 * 1000L, now)
             stats != null && stats.isNotEmpty()
         } catch (t: Throwable) {
