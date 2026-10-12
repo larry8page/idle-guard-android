@@ -1,6 +1,7 @@
 package com.larry8page.idleguard
 
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
@@ -35,6 +36,6 @@ class LogActivity : AppCompatActivity() {
     private fun refresh() {
         val txt = Logger.readAll(this)
         logText.text = if (txt.isBlank()) "暂无日志。触发一次或放置到点后，这里会出现记录。" else txt
-        scroll.post { scroll.fullScroll(ScrollView.FOCUS_TOP) }
+        scroll.post { scroll.fullScroll(View.FOCUS_UP) }
     }
 }
