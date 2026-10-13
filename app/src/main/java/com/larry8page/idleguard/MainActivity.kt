@@ -4,8 +4,6 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlarmManager
 import android.app.admin.DevicePolicyManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -97,13 +95,6 @@ class MainActivity : AppCompatActivity() {
             )
             runCatching { startActivity(i) }.onFailure { toastCantOpen() }
         }
-        b.btnCopyDoCmd.setOnClickListener {
-            val cmd = "adb shell dpm set-device-owner " +
-                "$packageName/${IdleGuardDeviceAdminReceiver::class.java.name}"
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("dpm", cmd))
-            Toast.makeText(this, R.string.toast_cmd_copied, Toast.LENGTH_LONG).show()
-        }
         b.btnIgnoreBattery.setOnClickListener {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
             intent.data = Uri.parse("package:$packageName")
@@ -158,11 +149,6 @@ class MainActivity : AppCompatActivity() {
         return dpm.isAdminActive(ComponentName(this, IdleGuardDeviceAdminReceiver::class.java))
     }
 
-    private fun isDeviceOwner(): Boolean {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return runCatching { dpm.isDeviceOwnerApp(packageName) }.getOrDefault(false)
-    }
-
     private fun isIgnoringBattery(): Boolean {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         return runCatching { pm.isIgnoringBatteryOptimizations(packageName) }.getOrDefault(false)
@@ -177,16 +163,13 @@ class MainActivity : AppCompatActivity() {
     private fun missingPermissions(): List<String> {
         val out = mutableListOf<String>()
         if (!isAccessibilityEnabled()) out += getString(R.string.perm_accessibility)
-        if (!isDeviceAdminActive() && !isDeviceOwner()) out += getString(R.string.perm_device_admin)
+        if (!isDeviceAdminActive()) out += getString(R.string.perm_device_admin)
         return out
     }
 
     private fun refreshPermissionUi() {
         b.statusAccessibility.text = statusLine(getString(R.string.perm_accessibility), isAccessibilityEnabled())
         b.statusDeviceAdmin.text = statusLine(getString(R.string.perm_device_admin), isDeviceAdminActive())
-        val owner = isDeviceOwner()
-        b.statusDeviceOwner.text = statusLine(getString(R.string.perm_device_owner), owner)
-        b.btnCopyDoCmd.visibility = if (owner) android.view.View.GONE else android.view.View.VISIBLE
         b.statusBattery.text = statusLine(getString(R.string.perm_battery), isIgnoringBattery())
         val exactOk = isExactAlarmGranted()
         b.statusExactAlarm.text = statusLine(getString(R.string.perm_exact_alarm), exactOk)

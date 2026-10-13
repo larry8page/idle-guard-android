@@ -159,26 +159,6 @@
             android:text="@string/btn_grant" />
 
         <TextView
-            android:id="@+id/statusDeviceOwner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/perm_device_owner" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/device_owner_hint"
-            android:textAppearance="?attr/textAppearanceBodySmall" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCopyDoCmd"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_copy_docmd" />
-
-        <TextView
             android:id="@+id/statusBattery"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
