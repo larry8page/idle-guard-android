@@ -127,7 +127,7 @@ object ActionRunner {
      */
     fun runSequenceNow(ctx: Context) {
         val app = ctx.applicationContext
-        val pkg = ForegroundApp.peek(app)
+        val pkg = CurrentApp.pkg(app)
         val home = goHome(app)
         Logger.log(app, "触发执行 → 回桌面=$home  (前台=${pkg ?: "未知"})")
         Handler(Looper.getMainLooper()).postDelayed({

@@ -52,6 +52,14 @@ class IdleAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() { /* no-op */ }
 
+    /**
+     * Real-time foreground package via the active window root. Unlike UsageStats
+     * (which this device flushes late and can report hours-stale apps), this is
+     * instantaneous. MUST be called BEFORE pressing HOME.
+     */
+    fun currentForegroundPkg(): String? =
+        runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+
     override fun onDestroy() {
         instance = null
         super.onDestroy()

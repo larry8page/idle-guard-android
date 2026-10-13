@@ -56,3 +56,19 @@ object ForegroundApp {
             l.contains("settings") || l.contains("inputmethod") || l.contains("mihome")
     }
 }
+
+/**
+ * Best-available foreground package at this instant.
+ * Order: accessibility active window (real time) → UsageStats (may lag).
+ * If the winner is a system/launcher package, tries the other source first.
+ */
+object CurrentApp {
+    fun pkg(ctx: Context): String? {
+        val live = IdleAccessibilityService.instance?.currentForegroundPkg()
+        val stats = ForegroundApp.peek(ctx)
+        val first = live ?: stats
+        val second = if (first === live) stats else live
+        return if (first != null && !ForegroundApp.isNonTarget(ctx, first)) first
+        else second ?: first
+    }
+}

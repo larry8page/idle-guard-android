@@ -115,7 +115,7 @@ class IdleGuardService : Service() {
         if (state != State.MONITORING) return
         if (!SettingsStore.isEnabled(this)) return
 
-        val pkg = ForegroundApp.peek(this)
+        val pkg = CurrentApp.pkg(this)
         savePendingPkg(pkg)
         val home = ActionRunner.goHome(this)
 
