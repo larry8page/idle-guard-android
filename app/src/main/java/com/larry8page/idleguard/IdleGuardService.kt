@@ -166,8 +166,9 @@ class IdleGuardService : Service() {
         KillScheduler.cancel(this)
         val pkg = loadPendingPkg()
         clearPendingPkg()
-        ActionRunner.killForeground(this, pkg)
-        handler.postDelayed({ ActionRunner.lockScreen(this) }, 800L)
+        ActionRunner.killForeground(this, pkg) {
+            handler.postDelayed({ ActionRunner.lockScreen(this) }, 800L)
+        }
         refreshNotification()
     }
 

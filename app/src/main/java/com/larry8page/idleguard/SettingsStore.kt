@@ -8,7 +8,7 @@ object SettingsStore {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_IDLE_MIN = "idle_minutes"
     private const val KEY_COUNTDOWN_MIN = "countdown_minutes"
-    const val DEFAULT_IDLE_MIN = 5
+    const val DEFAULT_IDLE_MIN = 1
     const val DEFAULT_COUNTDOWN_MIN = 0
     const val MAX_IDLE_MIN = 24 * 60
 

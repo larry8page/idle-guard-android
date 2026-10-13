@@ -9,20 +9,24 @@ import android.os.Handler
 import android.os.Looper
 
 /**
- * Idle-time actions (mute/DND was removed by design — killing the app is the point now):
+ * Idle-time actions (mute/DND removed by design — killing the app is the point):
  *
- *  goHome()        — HOME via AccessibilityService (background the foreground app)
- *  killForeground()— deep-kill the identified app:
- *                      · device owner  → DevicePolicyManager.forceStopPackage (real "Force stop")
- *                      · otherwise     → ActivityManager.killBackgroundProcesses (best effort;
- *                                        apps with a foreground service survive this)
- *  lockScreen()    — DevicePolicyManager.lockNow()
+ *  goHome()         — HOME via AccessibilityService.
+ *  killForeground() — kill the identified app, best available path:
+ *                       1. device owner            → setApplicationHidden(true)
+ *                                                     (system force-stops it; auto-restored on return)
+ *                       2. accessibility connected → open Settings "App info" for the target and
+ *                                                     auto-tap 强行停止 + confirm (works on stock /
+ *                                                     MIUI / EMUI / ColorOS wording variants)
+ *                       3. otherwise / on failure  → ActivityManager.killBackgroundProcesses
+ *                                                     (light: cannot stop foreground-service apps)
+ *  lockScreen()     — DevicePolicyManager.lockNow()
  *
- * Every step logs its outcome to [Logger].
+ * killForeground is asynchronous (path 2 takes seconds); [onDone] receives the
+ * outcome so callers can chain the lock AFTER the kill finished.
  */
 object ActionRunner {
     private const val KILL_DELAY_MS = 800L
-    private const val LOCK_DELAY_MS = 1600L
     private const val STATE_PREFS = "idle_guard_state"
     private const val KEY_HIDDEN_PKG = "hidden_pkg"
 
@@ -39,30 +43,48 @@ object ActionRunner {
         }
     }
 
-    /** Kills (or attempts to kill) the given package. Logs the result. @return description. */
-    fun killForeground(ctx: Context, pkg: String?): String {
+    fun killForeground(ctx: Context, pkg: String?, onDone: ((String) -> Unit)? = null) {
         val app = ctx.applicationContext
         val dpm = app.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val isOwner = runCatching { dpm.isDeviceOwnerApp(app.packageName) }.getOrDefault(false)
 
-        val desc = when {
-            pkg == null -> "未识别到前台包名，跳过"
-            ForegroundApp.isNonTarget(app, pkg) -> "目标为系统/桌面，跳过（$pkg）"
+        fun done(desc: String) {
+            Logger.log(app, "清理前台 → $desc")
+            onDone?.invoke(desc)
+        }
+
+        when {
+            pkg == null -> done("未识别到前台包名，跳过")
+            ForegroundApp.isNonTarget(app, pkg) -> done("目标为系统/桌面，跳过（$pkg）")
             isOwner -> {
                 val admin = ComponentName(app, IdleGuardDeviceAdminReceiver::class.java)
                 val ok = runCatching { dpm.setApplicationHidden(admin, pkg, true) }.getOrDefault(false)
                 if (ok) {
                     app.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
                         .putString(KEY_HIDDEN_PKG, pkg).apply()
-                    "已隐藏强停 $pkg（用户返回后自动恢复）"
+                    done("已隐藏强停 $pkg（用户返回后自动恢复）")
                 } else {
-                    lightKill(app, pkg) + "（隐藏失败，退回轻量清理）"
+                    done(lightKill(app, pkg) + "（隐藏失败，退回轻量清理）")
                 }
             }
-            else -> lightKill(app, pkg) + "（未配DeviceOwner，带前台服务的可能杀不掉）"
+            else -> {
+                val svc = IdleAccessibilityService.instance
+                if (svc != null) {
+                    svc.autoForceStop(pkg) { desc ->
+                        if (desc.startsWith("已通过设置页")) {
+                            runCatching {
+                                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                            }
+                            done(desc)
+                        } else {
+                            done(desc + "，退回 " + lightKill(app, pkg))
+                        }
+                    }
+                } else {
+                    done(lightKill(app, pkg) + "（无障碍未连接，无法深杀）")
+                }
+            }
         }
-        Logger.log(app, "清理前台 → $desc")
-        return desc
     }
 
     /** Un-hides whatever killForeground hid, when the user comes back. */
@@ -80,7 +102,7 @@ object ActionRunner {
     private fun lightKill(app: Context, pkg: String): String {
         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val ok = runCatching { am.killBackgroundProcesses(pkg) }.isSuccess
-        return if (ok) "已清理 $pkg" else "清理失败 $pkg"
+        return if (ok) "已轻量清理 $pkg" else "轻量清理失败 $pkg"
     }
 
     /** Locks the screen via device admin / device owner. Logs the result. @return description. */
@@ -100,16 +122,18 @@ object ActionRunner {
     }
 
     /**
-     * Full immediate sequence (used by the test button and when the service isn't running):
-     * peek → HOME → (+0.8s) kill → (+1.6s) lock.
+     * Full immediate sequence (test button / service-not-running fallback):
+     * peek → HOME → (+0.8s) kill (async) → lock after kill completes.
      */
     fun runSequenceNow(ctx: Context) {
         val app = ctx.applicationContext
         val pkg = ForegroundApp.peek(app)
         val home = goHome(app)
         Logger.log(app, "触发执行 → 回桌面=$home  (前台=${pkg ?: "未知"})")
-        val handler = Handler(Looper.getMainLooper())
-        handler.postDelayed({ killForeground(app, pkg) }, KILL_DELAY_MS)
-        handler.postDelayed({ lockScreen(app) }, LOCK_DELAY_MS)
+        Handler(Looper.getMainLooper()).postDelayed({
+            killForeground(app, pkg) {
+                Handler(Looper.getMainLooper()).postDelayed({ lockScreen(app) }, 800L)
+            }
+        }, KILL_DELAY_MS)
     }
 }

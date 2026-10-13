@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">闲置守护</string>
     <string name="accessibility_service_label">闲置守护（无障碍）</string>
-    <string name="accessibility_service_description">用于检测用户触屏操作（点击/长按）以判断是否闲置，并在触发时执行"回到桌面"。本应用不会读取窗口内容。</string>
+    <string name="accessibility_service_description">用途一：检测触屏点击以判断是否闲置；用途二：触发时自动打开系统“应用信息”页并点击“强行停止”以关闭前台应用。除该设置页面外，不会读取或记录其它应用的窗口内容。</string>
 
     <string name="header_subtitle">"闲置"＝没有任何触屏操作。到点先回桌面，再按"倒计时关闭"强制停止前台App并锁屏。</string>
 
