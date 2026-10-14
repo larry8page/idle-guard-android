@@ -91,6 +91,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".WatchdogReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".IdleGuardDeviceAdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="true">

@@ -2,6 +2,7 @@ package com.larry8page.idleguard
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -9,6 +10,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 /**
  * Watches for real user-interaction events to reset the idle timer (taps only:
@@ -53,12 +55,39 @@ class IdleAccessibilityService : AccessibilityService() {
     override fun onInterrupt() { /* no-op */ }
 
     /**
-     * Real-time foreground package via the active window root. Unlike UsageStats
-     * (which this device flushes late and can report hours-stale apps), this is
-     * instantaneous. MUST be called BEFORE pressing HOME.
+     * Real-time foreground package by window AREA, not focus: TV/box video
+     * windows are often non-focusable, so rootInActiveWindow alone can report a
+     * random previously-focused app (e.g. Alipay) instead of the playing video.
+     * Strategy: among non-system application windows, prefer a focused one that
+     * covers >=60% of the screen, otherwise the largest one. MUST be called
+     * BEFORE pressing HOME.
      */
-    fun currentForegroundPkg(): String? =
-        runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+    fun currentForegroundPkg(): String? {
+        return try {
+            val dm = resources.displayMetrics
+            val screenArea = dm.widthPixels.toLong() * dm.heightPixels.toLong()
+            val appWindows = windows.filter { w ->
+                w.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                    w.packageName?.toString()?.let { !isSystemish(it) } == true
+            }
+            val big = appWindows
+                .filter { area(it.boundsInScreen) * 10L >= screenArea * 6L }
+                .sortedByDescending { area(it.boundsInScreen) }
+            val win = big.firstOrNull { it.isFocused } ?: big.firstOrNull()
+                ?: appWindows.maxByOrNull { area(it.boundsInScreen) }
+            (win?.packageName ?: rootInActiveWindow?.packageName)?.toString()
+        } catch (t: Throwable) {
+            runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        }
+    }
+
+    private fun area(r: Rect): Long = (r.width().toLong() * r.height().toLong()).coerceAtLeast(0L)
+
+    private fun isSystemish(pkg: String): Boolean {
+        val l = pkg.lowercase()
+        return l.contains("systemui") || l.contains("launcher") || l.contains("mihome") ||
+            l.contains("inputmethod") || pkg == "android" || pkg == packageName
+    }
 
     override fun onDestroy() {
         instance = null
@@ -92,7 +121,8 @@ class IdleAccessibilityService : AccessibilityService() {
         val task = object : Runnable {
             override fun run() {
                 if (SystemClock.elapsedRealtime() > deadline) {
-                    finish("未找到强行停止按钮(超时)")
+                    val where = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: "?"
+                    finish("未找到强行停止按钮(超时,当前窗口=$where)")
                     return
                 }
                 val root = runCatching { rootInActiveWindow }.getOrNull()

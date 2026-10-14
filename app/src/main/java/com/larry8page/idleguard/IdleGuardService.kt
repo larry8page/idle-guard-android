@@ -35,6 +35,7 @@ class IdleGuardService : Service() {
     @Volatile private var state: State = State.MONITORING
     private var screenReceiver: BroadcastReceiver? = null
     private var lastResetLogMs: Long = 0L
+    private var asleepSinceMs: Long = 0L
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
@@ -70,6 +71,7 @@ class IdleGuardService : Service() {
         ensureChannel()
         startForeground(NOTIF_ID, buildNotification())
         registerScreenReceiver()
+        WatchdogScheduler.schedule(this)
         Logger.log(this, "守护服务已启动")
     }
 
@@ -106,7 +108,7 @@ class IdleGuardService : Service() {
                 }
             }
             State.WAIT_KILL -> abortKill()
-            State.ASLEEP -> { /* waiting for USER_PRESENT */ }
+            State.ASLEEP -> onUserReturned("触屏")
         }
     }
 
@@ -163,6 +165,7 @@ class IdleGuardService : Service() {
 
     private fun proceedToKillAndLock() {
         state = State.ASLEEP
+        asleepSinceMs = SystemClock.elapsedRealtime()
         KillScheduler.cancel(this)
         val pkg = loadPendingPkg()
         clearPendingPkg()
@@ -189,23 +192,41 @@ class IdleGuardService : Service() {
         val r = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, i: Intent?) {
                 when (i?.action) {
-                    Intent.ACTION_USER_PRESENT -> onUserReturned()
+                    Intent.ACTION_USER_PRESENT -> onUserReturned("解锁")
+                    Intent.ACTION_SCREEN_ON -> if (state == State.ASLEEP) onUserReturned("亮屏")
                 }
             }
         }
-        val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
         runCatching { ContextCompat.registerReceiver(this, r, filter, ContextCompat.RECEIVER_NOT_EXPORTED) }
         screenReceiver = r
     }
 
-    private fun onUserReturned() {
+    private fun onUserReturned(reason: String) {
         if (state == State.ASLEEP) {
             state = State.MONITORING
             ActionRunner.restoreHidden(this)
-            Logger.log(this, "用户返回 → 恢复监测")
+            Logger.log(this, "用户返回($reason) → 恢复监测")
             refreshNotification()
         }
         rescheduleIfMonitoring()
+    }
+
+    /** Called by the 10-min watchdog; also repairs lost alarms after OEM kills. */
+    fun watchdogTick() {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        when (state) {
+            State.ASLEEP -> if (pm.isInteractive &&
+                SystemClock.elapsedRealtime() - asleepSinceMs > 12 * 60_000L) {
+                Logger.log(this, "看门狗 → 亮屏超12分钟仍沉睡，强制恢复监测")
+                onUserReturned("看门狗")
+            }
+            State.MONITORING -> rescheduleIfMonitoring()
+            State.WAIT_KILL -> { /* kill alarm owns this state */ }
+        }
     }
 
     private fun rescheduleIfMonitoring() {
