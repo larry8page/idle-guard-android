@@ -11,16 +11,26 @@ android {
         applicationId = "com.larry8page.idleguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.10"
+        versionCode = 12
+        versionName = "1.11"
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    signingConfigs {
+        create("stable") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stable")
         }
         release {
             isMinifyEnabled = false
