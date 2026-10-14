@@ -72,6 +72,11 @@ class IdleGuardService : Service() {
         startForeground(NOTIF_ID, buildNotification())
         registerScreenReceiver()
         WatchdogScheduler.schedule(this)
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (pm.isInteractive) {
+            ActionRunner.restoreVolume(this)
+            ActionRunner.restoreHidden(this)
+        }
         Logger.log(this, "守护服务已启动")
     }
 
@@ -207,10 +212,13 @@ class IdleGuardService : Service() {
     }
 
     private fun onUserReturned(reason: String) {
+        // Unconditional: these self-guard on persisted markers. After an OEM
+        // process kill the in-memory ASLEEP state is lost, and the old guarded
+        // call used to skip volume restore forever.
+        ActionRunner.restoreVolume(this)
+        ActionRunner.restoreHidden(this)
         if (state == State.ASLEEP) {
             state = State.MONITORING
-            ActionRunner.restoreHidden(this)
-            ActionRunner.restoreVolume(this)
             Logger.log(this, "用户返回($reason) → 恢复监测")
             refreshNotification()
         }
@@ -220,6 +228,11 @@ class IdleGuardService : Service() {
     /** Called by the 10-min watchdog; also repairs lost alarms after OEM kills. */
     fun watchdogTick() {
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (pm.isInteractive && state != State.ASLEEP && state != State.WAIT_KILL) {
+            // process may have restarted mid-mute: markers persisted but nobody restored
+            ActionRunner.restoreVolume(this)
+            ActionRunner.restoreHidden(this)
+        }
         when (state) {
             State.ASLEEP -> if (pm.isInteractive &&
                 SystemClock.elapsedRealtime() - asleepSinceMs > 12 * 60_000L) {
