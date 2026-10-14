@@ -63,25 +63,25 @@ class IdleAccessibilityService : AccessibilityService() {
      * BEFORE pressing HOME.
      */
     fun currentForegroundPkg(): String? {
+        data class WinInfo(val pkg: String, val area: Long, val focused: Boolean)
         return try {
             val dm = resources.displayMetrics
             val screenArea = dm.widthPixels.toLong() * dm.heightPixels.toLong()
-            val appWindows = windows.filter { w ->
-                w.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
-                    w.packageName?.toString()?.let { !isSystemish(it) } == true
-            }
-            val big = appWindows
-                .filter { area(it.boundsInScreen) * 10L >= screenArea * 6L }
-                .sortedByDescending { area(it.boundsInScreen) }
-            val win = big.firstOrNull { it.isFocused } ?: big.firstOrNull()
-                ?: appWindows.maxByOrNull { area(it.boundsInScreen) }
-            (win?.packageName ?: rootInActiveWindow?.packageName)?.toString()
+            val ws = windows.mapNotNull { w ->
+                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@mapNotNull null
+                val pkg = runCatching { w.root?.packageName?.toString() }.getOrNull()
+                    ?: return@mapNotNull null
+                val r = Rect()
+                runCatching { w.getBoundsInScreen(r) }
+                WinInfo(pkg, (r.width().toLong() * r.height().toLong()).coerceAtLeast(0L), w.isFocused)
+            }.filter { !isSystemish(it.pkg) }
+            val big = ws.filter { it.area * 10L >= screenArea * 6L }.sortedByDescending { it.area }
+            (big.firstOrNull { it.focused } ?: big.firstOrNull() ?: ws.maxByOrNull { it.area })?.pkg
+                ?: runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
         } catch (t: Throwable) {
             runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
         }
     }
-
-    private fun area(r: Rect): Long = (r.width().toLong() * r.height().toLong()).coerceAtLeast(0L)
 
     private fun isSystemish(pkg: String): Boolean {
         val l = pkg.lowercase()
