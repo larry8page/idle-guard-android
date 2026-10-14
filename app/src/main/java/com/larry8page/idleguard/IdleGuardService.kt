@@ -119,17 +119,18 @@ class IdleGuardService : Service() {
 
         val pkg = CurrentApp.pkg(this)
         savePendingPkg(pkg)
-        val home = ActionRunner.goHome(this)
-
-        val cd = SettingsStore.countdownMillis(this)
-        if (cd <= 0L) {
-            Logger.log(this, "触发执行 → 回桌面=$home  (前台=${pkg ?: "未知"})")
-            proceedToKillAndLock()
-        } else {
-            Logger.log(this, "触发执行 → 回桌面=$home  (前台=${pkg ?: "未知"})  进入 ${cd / 60_000} 分钟关闭倒计时")
-            state = State.WAIT_KILL
-            KillScheduler.schedule(this, cd)
-            refreshNotification()
+        ActionRunner.muteNow(this)
+        ActionRunner.leaveApp(this) { desc ->
+            val cd = SettingsStore.countdownMillis(this)
+            if (cd <= 0L) {
+                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
+                proceedToKillAndLock()
+            } else {
+                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})  进入 ${cd / 60_000} 分钟关闭倒计时")
+                state = State.WAIT_KILL
+                KillScheduler.schedule(this, cd)
+                refreshNotification()
+            }
         }
     }
 
@@ -209,6 +210,7 @@ class IdleGuardService : Service() {
         if (state == State.ASLEEP) {
             state = State.MONITORING
             ActionRunner.restoreHidden(this)
+            ActionRunner.restoreVolume(this)
             Logger.log(this, "用户返回($reason) → 恢复监测")
             refreshNotification()
         }

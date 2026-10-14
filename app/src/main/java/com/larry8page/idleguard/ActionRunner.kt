@@ -5,6 +5,7 @@ import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 
@@ -41,6 +42,33 @@ object ActionRunner {
             svc == null -> "无障碍未连接"
             else -> "失败"
         }
+    }
+
+    /**
+     * Preferred way to leave the foreground app: BACK ×2 (400ms apart) then HOME.
+     * On this TV/box, HOME alone makes video apps fall back into a floating PiP
+     * window, while two BACK presses actually finish the app; HOME stays as the
+     * safety net. Callback receives a short description once the sequence ends.
+     */
+    fun leaveApp(ctx: Context, onDone: (String) -> Unit) {
+        val svc = IdleAccessibilityService.instance
+        if (svc == null) {
+            onDone("无障碍未连接,仅静音")
+            return
+        }
+        val h = Handler(Looper.getMainLooper())
+        val b1 = runCatching {
+            svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        }.getOrDefault(false)
+        h.postDelayed({
+            val b2 = runCatching {
+                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            }.getOrDefault(false)
+            h.postDelayed({
+                goHome(ctx)
+                onDone("双BACK=${if (b1 && b2) "OK" else "$b1/$b2"}+HOME")
+            }, 400)
+        }, 400)
     }
 
     fun killForeground(ctx: Context, pkg: String?, onDone: ((String) -> Unit)? = null) {
@@ -99,6 +127,44 @@ object ActionRunner {
         Logger.log(app, "恢复显示 → $pkg ${if (ok) "OK" else "失败"}")
     }
 
+    private const val KEY_VOL_SAVED = "vol_saved_json"
+
+    /**
+     * Safety net for apps that survive the kill (e.g. 央视频 floating PiP window):
+     * zero the media/system volume now; original levels are restored on user return.
+     */
+    fun muteNow(ctx: Context) {
+        val app = ctx.applicationContext
+        val am = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val sp = app.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        if (sp.contains(KEY_VOL_SAVED)) return // already muted by us
+        val music = runCatching { am.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0)
+        val system = runCatching { am.getStreamVolume(AudioManager.STREAM_SYSTEM) }.getOrDefault(0)
+        sp.edit().putString(KEY_VOL_SAVED, "$music,$system").apply()
+        val okM = runCatching {
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0); true
+        }.getOrDefault(false)
+        runCatching { am.setStreamVolume(AudioManager.STREAM_SYSTEM, 0, 0) }
+        Logger.log(app, "静音(音量) → ${if (okM) "已调到最小（原媒体$music/系统$system）" else "失败（原媒体$music/系统$system）"}")
+    }
+
+    /** Restore volumes saved by muteNow, when the user comes back. */
+    fun restoreVolume(ctx: Context) {
+        val app = ctx.applicationContext
+        val sp = app.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val saved = sp.getString(KEY_VOL_SAVED, null) ?: return
+        sp.edit().remove(KEY_VOL_SAVED).apply()
+        val parts = saved.split(",")
+        val music = parts.getOrNull(0)?.toIntOrNull() ?: return
+        val system = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val am = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxM = runCatching { am.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(music)
+        runCatching { am.setStreamVolume(AudioManager.STREAM_MUSIC, music.coerceIn(0, maxM), 0) }
+        val maxS = runCatching { am.getStreamMaxVolume(AudioManager.STREAM_SYSTEM) }.getOrDefault(system)
+        runCatching { am.setStreamVolume(AudioManager.STREAM_SYSTEM, system.coerceIn(0, maxS), 0) }
+        Logger.log(app, "恢复音量 → 媒体$music/系统$system")
+    }
+
     private fun lightKill(app: Context, pkg: String): String {
         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val ok = runCatching { am.killBackgroundProcesses(pkg) }.isSuccess
@@ -128,12 +194,14 @@ object ActionRunner {
     fun runSequenceNow(ctx: Context) {
         val app = ctx.applicationContext
         val pkg = CurrentApp.pkg(app)
-        val home = goHome(app)
-        Logger.log(app, "触发执行 → 回桌面=$home  (前台=${pkg ?: "未知"})")
-        Handler(Looper.getMainLooper()).postDelayed({
-            killForeground(app, pkg) {
-                Handler(Looper.getMainLooper()).postDelayed({ lockScreen(app) }, 800L)
-            }
-        }, KILL_DELAY_MS)
+        muteNow(app)
+        leaveApp(app) { desc ->
+            Logger.log(app, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
+            Handler(Looper.getMainLooper()).postDelayed({
+                killForeground(app, pkg) {
+                    Handler(Looper.getMainLooper()).postDelayed({ lockScreen(app) }, 800L)
+                }
+            }, 400)
+        }
     }
 }
