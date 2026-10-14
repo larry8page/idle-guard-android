@@ -125,7 +125,7 @@ class IdleGuardService : Service() {
         val pkg = CurrentApp.pkg(this)
         savePendingPkg(pkg)
         ActionRunner.muteNow(this)
-        ActionRunner.leaveApp(this) { desc ->
+        ActionRunner.leaveApp(this, pkg) { desc ->
             val cd = SettingsStore.countdownMillis(this)
             if (cd <= 0L) {
                 Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})")

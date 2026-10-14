@@ -45,30 +45,40 @@ object ActionRunner {
     }
 
     /**
-     * Preferred way to leave the foreground app: BACK ×2 (400ms apart) then HOME.
-     * On this TV/box, HOME alone makes video apps fall back into a floating PiP
-     * window, while two BACK presses actually finish the app; HOME stays as the
-     * safety net. Callback receives a short description once the sequence ends.
+     * Leave the foreground app WITHOUT eagerly pressing HOME: BACK up to 3 times
+     * (600ms apart), re-checking after each press whether [target] is still the
+     * foreground app. These video apps turn HOME into a floating PiP window, so
+     * HOME is only the last-resort fallback. Callback gets a short description.
      */
-    fun leaveApp(ctx: Context, onDone: (String) -> Unit) {
+    fun leaveApp(ctx: Context, target: String?, onDone: (String) -> Unit) {
         val svc = IdleAccessibilityService.instance
         if (svc == null) {
             onDone("无障碍未连接,仅静音")
             return
         }
+        val app = ctx.applicationContext
         val h = Handler(Looper.getMainLooper())
-        val b1 = runCatching {
+        fun back(): Boolean = runCatching {
             svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
         }.getOrDefault(false)
+        fun stillThere(): Boolean = target != null && CurrentApp.pkg(app) == target
+
+        var backs = 0
+        if (back()) backs++
         h.postDelayed({
-            val b2 = runCatching {
-                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-            }.getOrDefault(false)
+            if (stillThere() && back()) backs++
             h.postDelayed({
-                goHome(ctx)
-                onDone("双BACK=${if (b1 && b2) "OK" else "$b1/$b2"}+HOME")
-            }, 400)
-        }, 400)
+                if (stillThere() && back()) backs++
+                h.postDelayed({
+                    if (stillThere()) {
+                        goHome(app)
+                        onDone("BACK×$backs未退出,已HOME兜底")
+                    } else {
+                        onDone("BACK×$backs退出")
+                    }
+                }, 600)
+            }, 600)
+        }, 600)
     }
 
     fun killForeground(ctx: Context, pkg: String?, onDone: ((String) -> Unit)? = null) {
@@ -195,7 +205,7 @@ object ActionRunner {
         val app = ctx.applicationContext
         val pkg = CurrentApp.pkg(app)
         muteNow(app)
-        leaveApp(app) { desc ->
+        leaveApp(app, pkg) { desc ->
             Logger.log(app, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
             Handler(Looper.getMainLooper()).postDelayed({
                 killForeground(app, pkg) {

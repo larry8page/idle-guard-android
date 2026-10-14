@@ -83,6 +83,26 @@ class IdleAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Find the Settings app-info page among ALL windows — a video app's PiP
+     * floating window steals focus, which makes rootInActiveWindow useless
+     * during autoForceStop. Returns the settings window's root, or null.
+     */
+    private fun settingsPageRoot(): AccessibilityNodeInfo? {
+        return try {
+            windows.firstOrNull { w ->
+                val p = runCatching { w.root?.packageName?.toString() }.getOrNull() ?: return@firstOrNull false
+                (p.lowercase().contains("settings") || p.lowercase().contains("systemui")) &&
+                    runCatching { w.root?.findAccessibilityNodeInfosByText("强行停止")?.isNotEmpty() == true ||
+                        w.root?.findAccessibilityNodeInfosByText("强制停止")?.isNotEmpty() == true ||
+                        w.root?.findAccessibilityNodeInfosByText("Force stop")?.isNotEmpty() == true }
+                        .getOrDefault(false)
+            }?.root
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     private fun isSystemish(pkg: String): Boolean {
         val l = pkg.lowercase()
         return l.contains("systemui") || l.contains("launcher") || l.contains("mihome") ||
@@ -125,7 +145,7 @@ class IdleAccessibilityService : AccessibilityService() {
                     finish("未找到强行停止按钮(超时,当前窗口=$where)")
                     return
                 }
-                val root = runCatching { rootInActiveWindow }.getOrNull()
+                val root = settingsPageRoot() ?: runCatching { rootInActiveWindow }.getOrNull()
                 if (root != null) {
                     if (stage == 0) {
                         val node = findClickableByText(root, MAIN_BUTTON_TEXTS)
