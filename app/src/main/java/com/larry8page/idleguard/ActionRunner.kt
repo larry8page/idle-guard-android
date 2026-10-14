@@ -72,9 +72,9 @@ object ActionRunner {
                 h.postDelayed({
                     if (stillThere()) {
                         goHome(app)
-                        onDone("BACK×$backs未退出,已HOME兜底")
+                        onDone("BACK×${backs}未退出,已HOME兜底")
                     } else {
-                        onDone("BACK×$backs退出")
+                        onDone("BACK×${backs}退出")
                     }
                 }, 600)
             }, 600)
