@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         b.editCountdown.keyListener = DigitsKeyListener.getInstance("0123456789")
         b.editCountdown.setText(SettingsStore.countdownMinutes(this).toString())
         b.switchEnabled.isChecked = SettingsStore.isEnabled(this)
+        b.versionText.text = "当前版本 v${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})"
 
         b.switchEnabled.setOnCheckedChangeListener { _, checked ->
             if (checked) {
