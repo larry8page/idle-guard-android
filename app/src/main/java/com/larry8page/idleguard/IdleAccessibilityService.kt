@@ -1,7 +1,9 @@
 package com.larry8page.idleguard
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
@@ -112,6 +114,88 @@ class IdleAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         instance = null
         super.onDestroy()
+    }
+
+    // ---- automation helpers (used by YangshipinGuide) ----
+
+    fun pressBack(): Boolean = runCatching {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+    }.getOrDefault(false)
+
+    /** Search ALL windows for a visible clickable node whose text/desc matches any of [texts]. */
+    fun clickNodeByText(texts: List<String>, bottomOnly: Boolean = false): Boolean {
+        val screenH = resources.displayMetrics.heightPixels
+        return try {
+            for (w in windows) {
+                val root = runCatching { w.root }.getOrNull() ?: continue
+                for (t in texts) {
+                    val nodes = runCatching { root.findAccessibilityNodeInfosByText(t) }
+                        .getOrNull() ?: continue
+                    for (n in nodes) {
+                        val c = clickableParent(n) ?: n
+                        val b = Rect()
+                        runCatching { c.getBoundsInScreen(b) }
+                        if (bottomOnly && b.top < screenH * 0.72) continue
+                        if (!runCatching { c.isVisibleToUser }.getOrDefault(false)) continue
+                        if (runCatching {
+                                c.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            }.getOrDefault(false)) return true
+                    }
+                }
+            }
+            false
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    fun tapAt(x: Float, y: Float) {
+        val p = Path()
+        p.moveTo(x, y)
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(p, 0, 120))
+            .build()
+        runCatching { dispatchGesture(g, null, null) }
+    }
+
+    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
+        val p = Path()
+        p.moveTo(x1, y1)
+        p.lineTo(x2, y2)
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(p, 0, durationMs))
+            .build()
+        runCatching { dispatchGesture(g, null, null) }
+    }
+
+    /** Resolution-independent tap: fx/fy are fractions of screen width/height (0f..1f). */
+    fun tapRel(fx: Float, fy: Float) {
+        val dm = resources.displayMetrics
+        tapAt(dm.widthPixels * fx, dm.heightPixels * fy)
+    }
+
+    /** Resolution-independent swipe using screen-relative fractions. */
+    fun swipeRel(fx1: Float, fy1: Float, fx2: Float, fy2: Float, durationMs: Long) {
+        val dm = resources.displayMetrics
+        swipe(dm.widthPixels * fx1, dm.heightPixels * fy1, dm.widthPixels * fx2, dm.heightPixels * fy2, durationMs)
+    }
+
+    /** True if any visible node across all windows has text/desc containing any of [texts]. */
+    fun hasNodeText(texts: List<String>): Boolean {
+        return try {
+            for (w in windows) {
+                val root = runCatching { w.root }.getOrNull() ?: continue
+                for (t in texts) {
+                    val nodes = runCatching { root.findAccessibilityNodeInfosByText(t) }.getOrNull() ?: continue
+                    for (n in nodes) {
+                        if (runCatching { n.isVisibleToUser }.getOrDefault(false)) return true
+                    }
+                }
+            }
+            false
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     /**

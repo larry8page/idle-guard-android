@@ -8,6 +8,7 @@ object SettingsStore {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_IDLE_MIN = "idle_minutes"
     private const val KEY_COUNTDOWN_MIN = "countdown_minutes"
+    private const val KEY_WHITELIST_CCTV = "whitelist_cctv"
     const val DEFAULT_IDLE_MIN = 1
     const val DEFAULT_COUNTDOWN_MIN = 0
     const val MAX_IDLE_MIN = 24 * 60
@@ -40,4 +41,12 @@ object SettingsStore {
     }
 
     fun countdownMillis(ctx: Context): Long = countdownMinutes(ctx) * 60_000L
+
+    /** When 央视频 is the foreground app at trigger time, guide it to CCTV1 instead of kill+lock. */
+    fun whitelistCctv(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_WHITELIST_CCTV, true)
+
+    fun setWhitelistCctv(ctx: Context, v: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_WHITELIST_CCTV, v).apply()
+    }
 }

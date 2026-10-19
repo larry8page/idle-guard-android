@@ -30,7 +30,7 @@ import androidx.core.content.ContextCompat
  */
 class IdleGuardService : Service() {
 
-    enum class State { MONITORING, WAIT_KILL, ASLEEP }
+    enum class State { MONITORING, WAIT_KILL, GUIDING, ASLEEP }
 
     @Volatile private var state: State = State.MONITORING
     private var screenReceiver: BroadcastReceiver? = null
@@ -44,6 +44,7 @@ class IdleGuardService : Service() {
         const val EXTRA_KILL_NOW = "extra_kill_now"
         private const val STATE_PREFS = "idle_guard_state"
         private const val KEY_PENDING_PKG = "pending_fg_pkg"
+        private const val CCTV_POLL_MS = 10_000L
 
         @Volatile
         var instance: IdleGuardService? = null
@@ -78,6 +79,7 @@ class IdleGuardService : Service() {
             ActionRunner.restoreHidden(this)
         }
         Logger.log(this, "守护服务已启动")
+        startCctvPoll()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,6 +96,7 @@ class IdleGuardService : Service() {
         if (instance === this) instance = null
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
         screenReceiver = null
+        stopCctvPoll()
         TimerScheduler.cancel(this)
         KillScheduler.cancel(this)
         super.onDestroy()
@@ -113,6 +116,7 @@ class IdleGuardService : Service() {
                 }
             }
             State.WAIT_KILL -> abortKill()
+            State.GUIDING -> { /* guide owns the UI right now */ }
             State.ASLEEP -> onUserReturned("触屏")
         }
     }
@@ -124,6 +128,20 @@ class IdleGuardService : Service() {
 
         val pkg = CurrentApp.pkg(this)
         savePendingPkg(pkg)
+
+        if (pkg == YangshipinGuide.PKG && SettingsStore.whitelistCctv(this)) {
+            Logger.log(this, "触发执行 → 央视频白名单:引导到CCTV1(不杀不锁不静音)")
+            state = State.GUIDING
+            refreshNotification()
+            YangshipinGuide.run(this) { guideDesc ->
+                Logger.log(this, "央视频引导 → $guideDesc")
+                state = State.MONITORING
+                rescheduleIfMonitoring()
+                refreshNotification()
+            }
+            return
+        }
+
         ActionRunner.muteNow(this)
         ActionRunner.leaveApp(this, pkg) { desc ->
             val cd = SettingsStore.countdownMillis(this)
@@ -241,6 +259,7 @@ class IdleGuardService : Service() {
             }
             State.MONITORING -> rescheduleIfMonitoring()
             State.WAIT_KILL -> { /* kill alarm owns this state */ }
+            State.GUIDING -> { /* guide in progress */ }
         }
     }
 
@@ -252,6 +271,43 @@ class IdleGuardService : Service() {
         if (state == State.MONITORING) {
             TimerScheduler.schedule(this, SettingsStore.idleMillis(this))
         }
+    }
+
+    // ------- 央视频 10s foreground poll -------
+
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            try {
+                if (!SettingsStore.isEnabled(this@IdleGuardService) ||
+                    !SettingsStore.whitelistCctv(this@IdleGuardService) ||
+                    state != State.MONITORING
+                ) return
+                val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                if (!pm.isInteractive) return
+                if (CurrentApp.pkg(this@IdleGuardService) == YangshipinGuide.PKG) {
+                    Logger.log(this@IdleGuardService, "10秒轮询 → 前台是央视频，尝试引导到CCTV1")
+                    state = State.GUIDING
+                    refreshNotification()
+                    YangshipinGuide.run(this@IdleGuardService) { desc ->
+                        Logger.log(this@IdleGuardService, "央视频轮询引导 → $desc")
+                        state = State.MONITORING
+                        rescheduleIfMonitoring()
+                        refreshNotification()
+                    }
+                }
+            } finally {
+                handler.postDelayed(this, CCTV_POLL_MS)
+            }
+        }
+    }
+
+    private fun startCctvPoll() {
+        handler.removeCallbacks(pollRunnable)
+        handler.postDelayed(pollRunnable, CCTV_POLL_MS)
+    }
+
+    private fun stopCctvPoll() {
+        handler.removeCallbacks(pollRunnable)
     }
 
     private fun ensureChannel() {
@@ -288,6 +344,7 @@ class IdleGuardService : Service() {
     private fun stateText(): String = when (state) {
         State.MONITORING -> getString(R.string.notif_monitoring, SettingsStore.idleMinutes(this))
         State.WAIT_KILL -> getString(R.string.notif_waiting_kill, SettingsStore.countdownMinutes(this))
+        State.GUIDING -> getString(R.string.notif_guiding)
         State.ASLEEP -> getString(R.string.notif_asleep)
     }
 
