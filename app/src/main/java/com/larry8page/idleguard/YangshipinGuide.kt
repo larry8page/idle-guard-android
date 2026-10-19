@@ -11,27 +11,26 @@ import android.os.Looper
  * Goal: when 央视频 is the foreground app (idle trigger OR the 10s foreground
  * poll), drive it to CCTV1 live — WITHOUT ever blind-tapping coordinates.
  *
- * Hard constraints learned on-device (TCL T803H):
- *  - Splash / interstitial ads are SurfaceView-drawn: they expose NO accessibility
- *    node, and the "跳过" button position VARIES per ad (top-right in one, top-left
- *    in a playable ad). A fixed-coordinate tap therefore misfires (it opened a
- *    "算术派对" mini-game once). So we NEVER tap coordinates: we only click a real
- *    "跳过"/"关闭" node when one exists, otherwise we do nothing and let the ad's
- *    own countdown dismiss it — the 10s poll simply retries on the next tick.
- *  - The home channel strip is also self-drawn inside a horizontal ViewPager: a
- *    synthetic (dispatchGesture) horizontal swipe is swallowed by the ViewPager and
- *    cannot scroll the strip. CCTV1 is therefore reached via the "展开全部频道"
- *    grid, whose cells ARE real accessibility nodes.
+ * Design: a SELF-CORRECTING STATE MACHINE. Each 10s tick performs only the ONE
+ * next action that matches the current screen state, then returns. This avoids a
+ * rigid multi-step chain (whose timing desyncs if any single step's page hasn't
+ * rendered yet, and whose half-finished state then confuses the next tick).
  *
- * Every navigation step is gated on confirming the expected node; if a node is
- * missing we abort and retry next tick rather than guessing. Idempotent: already
- * on CCTV1 (a "CCTV-1栏目" node present) is a no-op, so watching is never disrupted.
+ * On-device constraints (TCL T803H / Freeme ROM):
+ *  - AccessibilityService.windows returns an EMPTY list here, so node search uses
+ *    rootInActiveWindow (see IdleAccessibilityService.candidateRoots()).
+ *  - Splash/interstitial ads are SurfaceView-drawn: no node, and the "跳过" position
+ *    VARIES per ad → we NEVER tap coordinates; a node-less ad is left to auto-dismiss
+ *    and retried on the next tick.
+ *  - The home channel strip is self-drawn inside a horizontal ViewPager: a synthetic
+ *    horizontal swipe is swallowed → CCTV1 is reached via the "展开全部频道" grid,
+ *    whose cells are real nodes.
  */
 object YangshipinGuide {
     const val PKG = "com.cctv.yangshipin.app.androidp"
 
-    private val CCTV1_MARKERS = listOf("CCTV-1栏目", "CCTV1栏目")
-    private val CCTV1_CELLS = listOf("综合频道", "CCTV1", "CCTV-1", "综合")
+    private val CCTV1_PAGE = listOf("CCTV-1栏目", "CCTV1栏目")
+    private val CCTV1_CELL = listOf("综合频道")
 
     fun run(ctx: Context, onDone: (String) -> Unit) {
         val svc = IdleAccessibilityService.instance
@@ -41,63 +40,42 @@ object YangshipinGuide {
         }
         val app = ctx.applicationContext
         val h = Handler(Looper.getMainLooper())
-        val done = mutableListOf<String>()
 
-        // Already on CCTV1 → nothing to do.
-        if (svc.hasNodeText(CCTV1_MARKERS)) {
-            onDone("已在CCTV1,无需引导")
-            return
-        }
-
-        fun finish(extra: String? = null) {
-            val all = if (extra != null) done + extra else done
-            onDone(if (all.isEmpty()) "无可执行步骤" else all.joinToString("→"))
-        }
-
-        // 1) exit fullscreen if landscape.
+        // 0) exit fullscreen if landscape.
         if (app.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            if (svc.pressBack()) done += "BACK退全屏"
+            if (svc.pressBack()) { onDone("横屏→BACK退全屏"); return }
         }
 
-        // 2) best-effort dismiss ad overlays that DO expose a node (native splash).
-        //    No coordinate fallback — a node-less playable ad is left to auto-dismiss.
-        if (svc.clickNodeByText(listOf("跳过"))) done += "跳过(节点)"
-        if (svc.clickNodeByText(listOf("关闭"))) done += "关弹窗(节点)"
+        // 1) already on CCTV1 → nothing to do.
+        if (svc.hasNodeText(CCTV1_PAGE)) { onDone("已在CCTV1,无需引导"); return }
 
-        // Give a just-dismissed splash a moment before probing the real UI.
-        h.postDelayed({
-            // 3) gate: the bottom "电视" nav must be present, else an ad still covers
-            //    the screen. Do NOT tap blindly — abort and retry next tick.
-            if (!svc.clickNodeByText(listOf("电视"), bottomOnly = true)) {
-                finish("未见底部电视导航(广告未消失?),等下轮重试 [" + svc.debugWindows("电视") + "]")
-                return@postDelayed
-            }
-            done += "进电视页"
+        // 2) grid open and CCTV1 cell visible → select it.
+        if (svc.clickNodeByText(CCTV1_CELL)) {
+            h.postDelayed({ onDone("选CCTV1(网格)") }, 1200); return
+        }
 
-            h.postDelayed({
-                // 4) open the 展开全部频道 grid (real node; the strip itself can't be swiped).
-                if (!svc.clickNodeByText(listOf("展开全部频道"))) {
-                    finish("展开网格失败,等下轮重试")
-                    return@postDelayed
-                }
-                done += "展开网格"
+        // 3) grid open (收起 present) but CCTV1 not visible → ensure CCTV tab, scroll up.
+        if (svc.hasNodeText(listOf("收起"))) {
+            svc.clickNodeByText(listOf("CCTV"))
+            svc.swipeRel(0.5f, 0.5f, 0.5f, 0.85f, 400L)
+            h.postDelayed({ onDone("网格:确保CCTV页签+上滚找CCTV1") }, 800); return
+        }
 
-                // 5) scroll the grid to its top row (vertical scroll works — it is the
-                //    grid's own scroll view, not the ViewPager).
-                svc.swipeRel(0.5f, 0.45f, 0.5f, 0.82f, 400L)
-                h.postDelayed({
-                    svc.swipeRel(0.5f, 0.45f, 0.5f, 0.82f, 400L)
-                    h.postDelayed({
-                        // 6) select CCTV1 by its grid cell node.
-                        if (svc.clickNodeByText(CCTV1_CELLS)) {
-                            done += "CCTV1(节点)"
-                            h.postDelayed({ finish() }, 1500)
-                        } else {
-                            finish("没找到CCTV1网格项,等下轮重试")
-                        }
-                    }, 900)
-                }, 700)
-            }, 2600)
-        }, 1200)
+        // 4) on the TV page → open the 展开全部频道 grid.
+        if (svc.clickNodeByText(listOf("展开全部频道"))) {
+            h.postDelayed({ onDone("展开网格") }, 1000); return
+        }
+
+        // 5) on home (bottom nav present) → go to the TV page.
+        if (svc.clickNodeByText(listOf("电视"), bottomOnly = true)) {
+            h.postDelayed({ onDone("进电视页") }, 1000); return
+        }
+
+        // 6) ad overlays that DO expose a node → dismiss them.
+        if (svc.clickNodeByText(listOf("跳过"))) { onDone("跳过(节点)"); return }
+        if (svc.clickNodeByText(listOf("关闭"))) { onDone("关弹窗(节点)"); return }
+
+        // otherwise: node-less ad still up, or a page not ready → wait, retry next tick.
+        onDone("等待(广告自动消失或页面未就绪)")
     }
 }

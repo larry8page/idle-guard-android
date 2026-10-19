@@ -11,8 +11,8 @@ android {
         applicationId = "com.larry8page.idleguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20
-        versionName = "1.19"
+        versionCode = 21
+        versionName = "1.20"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
