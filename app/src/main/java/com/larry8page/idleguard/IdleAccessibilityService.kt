@@ -122,12 +122,25 @@ class IdleAccessibilityService : AccessibilityService() {
         performGlobalAction(GLOBAL_ACTION_BACK)
     }.getOrDefault(false)
 
+    /**
+     * Roots to search for nodes. On this Freeme/TCL ROM AccessibilityService.windows
+     * returns an EMPTY list, but rootInActiveWindow correctly yields the foreground
+     * app's tree — so always include it (plus any windows that DO report).
+     */
+    private fun candidateRoots(): List<AccessibilityNodeInfo> {
+        val list = ArrayList<AccessibilityNodeInfo>()
+        runCatching { rootInActiveWindow }.getOrNull()?.let { list.add(it) }
+        runCatching {
+            for (w in windows) runCatching { w.root }.getOrNull()?.let { list.add(it) }
+        }
+        return list
+    }
+
     /** Search ALL windows for a visible clickable node whose text/desc matches any of [texts]. */
     fun clickNodeByText(texts: List<String>, bottomOnly: Boolean = false): Boolean {
         val screenH = resources.displayMetrics.heightPixels
         return try {
-            for (w in windows) {
-                val root = runCatching { w.root }.getOrNull() ?: continue
+            for (root in candidateRoots()) {
                 for (t in texts) {
                     val nodes = runCatching { root.findAccessibilityNodeInfosByText(t) }
                         .getOrNull() ?: continue
@@ -201,8 +214,7 @@ class IdleAccessibilityService : AccessibilityService() {
     /** True if any visible node across all windows has text/desc containing any of [texts]. */
     fun hasNodeText(texts: List<String>): Boolean {
         return try {
-            for (w in windows) {
-                val root = runCatching { w.root }.getOrNull() ?: continue
+            for (root in candidateRoots()) {
                 for (t in texts) {
                     val nodes = runCatching { root.findAccessibilityNodeInfosByText(t) }.getOrNull() ?: continue
                     for (n in nodes) {
