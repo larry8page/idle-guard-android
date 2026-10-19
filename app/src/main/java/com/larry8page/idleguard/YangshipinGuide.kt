@@ -69,7 +69,7 @@ object YangshipinGuide {
             // 3) gate: the bottom "电视" nav must be present, else an ad still covers
             //    the screen. Do NOT tap blindly — abort and retry next tick.
             if (!svc.clickNodeByText(listOf("电视"), bottomOnly = true)) {
-                finish("未见底部电视导航(广告未消失?),等下轮重试")
+                finish("未见底部电视导航(广告未消失?),等下轮重试 [" + svc.debugWindows("电视") + "]")
                 return@postDelayed
             }
             done += "进电视页"

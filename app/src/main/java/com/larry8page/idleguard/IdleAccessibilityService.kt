@@ -149,6 +149,24 @@ class IdleAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** Diagnostic: report every window the service sees and whether [query] matches. */
+    fun debugWindows(query: String): String {
+        val sb = StringBuilder()
+        runCatching {
+            val ws = windows
+            sb.append("windows=${ws.size};activeRootPkg=")
+            sb.append(runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: "null")
+            ws.forEachIndexed { i, w ->
+                val root = runCatching { w.root }.getOrNull()
+                val pkg = runCatching { root?.packageName?.toString() }.getOrNull() ?: "null"
+                val kids = runCatching { root?.childCount ?: -1 }.getOrDefault(-1)
+                val hits = runCatching { root?.findAccessibilityNodeInfosByText(query)?.size ?: -1 }.getOrDefault(-1)
+                sb.append(" | #$i type=${w.type} pkg=$pkg kids=$kids '$query'=$hits")
+            }
+        }.onFailure { sb.append(" EX=${it.message}") }
+        return sb.toString()
+    }
+
     fun tapAt(x: Float, y: Float) {
         val p = Path()
         p.moveTo(x, y)
