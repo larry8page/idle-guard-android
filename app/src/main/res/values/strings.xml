@@ -12,6 +12,7 @@
     <string name="notif_monitoring">闲置 %1$d 分钟 → 回桌面并执行关闭</string>
     <string name="notif_waiting_kill">关闭倒计时进行中（%1$d 分钟），触屏可打断</string>
     <string name="notif_asleep">已清理并锁屏，等你回来恢复监测</string>
+    <string name="notif_guiding">正在引导央视频到 CCTV1…</string>
 
     <!-- UI section headers -->
     <string name="section_settings">闲置设置</string>

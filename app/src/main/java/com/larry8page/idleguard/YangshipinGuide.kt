@@ -112,6 +112,6 @@ object YangshipinGuide {
         }
         exec(0)
     }
-
-    private typealias Settle = () -> Unit
 }
+
+private typealias Settle = () -> Unit
