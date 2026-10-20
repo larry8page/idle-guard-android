@@ -9,6 +9,7 @@ object SettingsStore {
     private const val KEY_IDLE_MIN = "idle_minutes"
     private const val KEY_COUNTDOWN_MIN = "countdown_minutes"
     private const val KEY_WHITELIST_CCTV = "whitelist_cctv"
+    private const val KEY_LOG_ENABLED = "log_enabled"
     const val DEFAULT_IDLE_MIN = 1
     const val DEFAULT_COUNTDOWN_MIN = 0
     const val MAX_IDLE_MIN = 24 * 60
@@ -48,5 +49,13 @@ object SettingsStore {
 
     fun setWhitelistCctv(ctx: Context, v: Boolean) {
         prefs(ctx).edit().putBoolean(KEY_WHITELIST_CCTV, v).apply()
+    }
+
+    /** Whether the 触发日志 should keep being written. Default ON (always log). */
+    fun isLogEnabled(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_LOG_ENABLED, true)
+
+    fun setLogEnabled(ctx: Context, v: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_LOG_ENABLED, v).apply()
     }
 }

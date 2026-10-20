@@ -26,6 +26,9 @@
     <string name="label_countdown">倒计时关闭（分钟，0=关）</string>
     <string name="hint_countdown">0＝闲置到点后直接 回桌面→杀前台→锁屏；&gt;0＝先回桌面，再等这个倒计时，期间触屏可打断</string>
 
+    <string name="label_log_enabled">写日志（记录触发与引导）</string>
+    <string name="hint_log_enabled">勾选=持续写入"触发日志";取消后不再记录任何日志(历史日志保留,可在日志页清空)</string>
+
     <string name="perm_accessibility">无障碍服务</string>
     <string name="perm_device_admin">设备管理器（用于锁屏）</string>
     <string name="perm_battery">忽略电池优化</string>

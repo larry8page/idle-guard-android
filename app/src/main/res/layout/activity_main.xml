@@ -122,6 +122,20 @@
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:visibility="gone" />
 
+        <CheckBox
+            android:id="@+id/checkLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:checked="true"
+            android:text="@string/label_log_enabled" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/hint_log_enabled"
+            android:textAppearance="?attr/textAppearanceBodySmall" />
+
         <!-- ====== 权限区 ====== -->
         <TextView
             android:layout_width="wrap_content"

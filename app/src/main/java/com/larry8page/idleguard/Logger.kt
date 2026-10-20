@@ -17,6 +17,7 @@ object Logger {
     private val fmt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
 
     fun log(ctx: Context, msg: String) {
+        if (!SettingsStore.isLogEnabled(ctx)) return // 用户关闭了日志:一条都不写
         val line = fmt.format(Date()) + "  " + msg
         val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val cur = sp.getString(KEY, "").orEmpty()

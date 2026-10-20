@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         b.editCountdown.keyListener = DigitsKeyListener.getInstance("0123456789")
         b.editCountdown.setText(SettingsStore.countdownMinutes(this).toString())
         b.switchEnabled.isChecked = SettingsStore.isEnabled(this)
+        b.checkLog.isChecked = SettingsStore.isLogEnabled(this)
         // Revive the guard service whenever the app is opened while enabled —
         // after an overwrite install / kill the service is gone, and setting
         // isChecked above does NOT fire the listener (it is attached below).
@@ -66,6 +67,10 @@ class MainActivity : AppCompatActivity() {
                 TimerScheduler.cancel(this)
                 KillScheduler.cancel(this)
             }
+        }
+
+        b.checkLog.setOnCheckedChangeListener { _, checked ->
+            SettingsStore.setLogEnabled(this, checked)
         }
 
         b.editMinutes.doAfterTextChanged { et ->
