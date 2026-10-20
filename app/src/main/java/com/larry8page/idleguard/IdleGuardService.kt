@@ -36,6 +36,12 @@ class IdleGuardService : Service() {
     private var screenReceiver: BroadcastReceiver? = null
     private var lastResetLogMs: Long = 0L
     private var asleepSinceMs: Long = 0L
+    // 央视频"冷启动单次引导"会话状态(见 pollRunnable):
+    // 只有从"非央视频 → 央视频"的那一次冷启动才开一个窗口,窗口内跳广告并导航到
+    // CCTV1,到达 CCTV1 或超过 CCTV_AD_WINDOW_MS 即休眠,期间不反复刷日志/干预。
+    private var wasCctvForeground = false
+    @Volatile private var cctvSessionActive = false
+    private var cctvSessionStartMs = 0L
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
@@ -45,6 +51,8 @@ class IdleGuardService : Service() {
         private const val STATE_PREFS = "idle_guard_state"
         private const val KEY_PENDING_PKG = "pending_fg_pkg"
         private const val CCTV_POLL_MS = 10_000L
+        private const val CCTV_STEP_MS = 4_000L
+        private const val CCTV_AD_WINDOW_MS = 30_000L
 
         @Volatile
         var instance: IdleGuardService? = null
@@ -127,6 +135,12 @@ class IdleGuardService : Service() {
         if (!SettingsStore.isEnabled(this)) return
 
         val pkg = CurrentApp.pkg(this)
+
+        // 前台已是桌面/启动器:没有需要清理的 App。
+        // 完全静默——不静音、不 leaveApp、不起关闭倒计时、不写日志、不锁屏;
+        // 桌面本身没有功耗,交给系统息屏超时处理即可。
+        if (ForegroundApp.isDesktop(this, pkg)) return
+
         savePendingPkg(pkg)
 
         if (pkg == YangshipinGuide.PKG && SettingsStore.whitelistCctv(this)) {
@@ -277,6 +291,7 @@ class IdleGuardService : Service() {
 
     private val pollRunnable = object : Runnable {
         override fun run() {
+            var nextDelay = CCTV_POLL_MS
             try {
                 if (!SettingsStore.isEnabled(this@IdleGuardService) ||
                     !SettingsStore.whitelistCctv(this@IdleGuardService) ||
@@ -284,19 +299,54 @@ class IdleGuardService : Service() {
                 ) return
                 val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                 if (!pm.isInteractive) return
-                if (CurrentApp.pkg(this@IdleGuardService) == YangshipinGuide.PKG) {
-                    Logger.log(this@IdleGuardService, "10秒轮询 → 前台是央视频，尝试引导到CCTV1")
-                    state = State.GUIDING
-                    refreshNotification()
-                    YangshipinGuide.run(this@IdleGuardService) { desc ->
-                        Logger.log(this@IdleGuardService, "央视频轮询引导 → $desc")
-                        state = State.MONITORING
-                        rescheduleIfMonitoring()
-                        refreshNotification()
+                if (IdleAccessibilityService.instance == null) return
+
+                val isCctv = CurrentApp.pkg(this@IdleGuardService) == YangshipinGuide.PKG
+
+                // 冷启动检测:上一拍不是央视频、这一拍是 → 开启一次引导会话
+                if (isCctv && !wasCctvForeground) {
+                    cctvSessionActive = true
+                    cctvSessionStartMs = SystemClock.elapsedRealtime()
+                    Logger.log(
+                        this@IdleGuardService,
+                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV1后休眠"
+                    )
+                }
+                wasCctvForeground = isCctv
+
+                // 已离开央视频:关闭会话(下次再进入算新的冷启动)
+                if (!isCctv) {
+                    cctvSessionActive = false
+                    return
+                }
+                // 无会话(本轮已到CCTV1/超时休眠,或只是停在央视频里没冷启动)→ 不干预、不写日志
+                if (!cctvSessionActive) return
+                // 窗口到点仍未到 CCTV1 → 休眠
+                if (SystemClock.elapsedRealtime() - cctvSessionStartMs > CCTV_AD_WINDOW_MS) {
+                    cctvSessionActive = false
+                    Logger.log(this@IdleGuardService, "央视频引导窗口超时 → 休眠,不再干预")
+                    return
+                }
+
+                // 会话内:每拍只做当前一步,用更快的步频让跳广告+导航能在窗口内走完
+                nextDelay = CCTV_STEP_MS
+                state = State.GUIDING
+                refreshNotification()
+                YangshipinGuide.run(this@IdleGuardService) { desc ->
+                    when {
+                        desc.contains("已在CCTV1") -> {
+                            Logger.log(this@IdleGuardService, "央视频引导 → 已到达CCTV1,休眠")
+                            cctvSessionActive = false
+                        }
+                        !desc.startsWith("等待") -> Logger.log(this@IdleGuardService, "央视频引导 → $desc")
+                        // "等待(广告自动消失或页面未就绪)" → 不写日志,下一拍再看
                     }
+                    state = State.MONITORING
+                    rescheduleIfMonitoring()
+                    refreshNotification()
                 }
             } finally {
-                handler.postDelayed(this, CCTV_POLL_MS)
+                handler.postDelayed(this, nextDelay)
             }
         }
     }

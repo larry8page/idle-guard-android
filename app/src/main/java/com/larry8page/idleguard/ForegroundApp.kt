@@ -4,6 +4,8 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 
 /**
  * Identifies the app that currently holds the foreground, using UsageStats
@@ -54,6 +56,28 @@ object ForegroundApp {
         val l = pkg.lowercase()
         return l.contains("launcher") || l.contains("systemui") ||
             l.contains("settings") || l.contains("inputmethod") || l.contains("mihome")
+    }
+
+    /** The package currently registered as the default HOME/launcher, or null. */
+    private fun homePackage(ctx: Context): String? = runCatching {
+        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        ctx.packageManager.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+    }.getOrNull()
+
+    /**
+     * True when the foreground is the DESKTOP/launcher itself — i.e. there is no
+     * real user app on screen worth cleaning. Kept narrower than [isNonTarget]
+     * (which also covers Settings / SystemUI): only the resolved home, plus the
+     * common launcher package-name substrings, count as the desktop here.
+     */
+    fun isDesktop(ctx: Context, pkg: String?): Boolean {
+        if (pkg == null) return false
+        val home = homePackage(ctx)
+        if (home != null && pkg == home) return true
+        val l = pkg.lowercase()
+        return l.contains("launcher") || l.contains("mihome") ||
+            l.contains("husky") || l == "com.android.launcher3"
     }
 }
 
