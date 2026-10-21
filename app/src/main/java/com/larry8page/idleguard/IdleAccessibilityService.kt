@@ -3,25 +3,16 @@ package com.larry8page.idleguard
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.Path
-import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
 
 /**
  * Watches for real user-interaction events to reset the idle timer (taps only:
@@ -64,110 +55,6 @@ class IdleAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() { /* no-op */ }
-
-    // ---- 执行前"10 秒可取消"全屏提示(用无障碍自带悬浮层,免悬浮窗权限) ----
-
-    private val ui = Handler(Looper.getMainLooper())
-    private var warnRoot: View? = null
-
-    /**
-     * 全屏倒计时提示:点按任意处 → [onCancel];无人操作数到 0 → [onProceed]。
-     * 用 TYPE_ACCESSIBILITY_OVERLAY 窗口(无障碍服务可越界绘制,无需 SYSTEM_ALERT_WINDOW)。
-     * 若因故无法弹出,直接视为超时并回调 [onProceed],绝不卡住关闭流程。
-     */
-    fun showKillWarning(seconds: Int, onCancel: () -> Unit, onProceed: () -> Unit) {
-        ui.post {
-            dismissKillWarning()
-            var settled = false
-            val cancel = { if (!settled) { settled = true; dismissKillWarning(); onCancel() } }
-            val proceed = { if (!settled) { settled = true; dismissKillWarning(); onProceed() } }
-            try {
-                val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                val density = resources.displayMetrics.density
-                val pad = (20 * density).toInt()
-
-                val root = FrameLayout(this)
-                root.setBackgroundColor(0xCC0E1116.toInt())
-                root.isClickable = true
-
-                val card = LinearLayout(this)
-                card.orientation = LinearLayout.VERTICAL
-                card.gravity = Gravity.CENTER
-                card.setPadding(pad, pad, pad, pad)
-
-                val count = TextView(this).apply {
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
-                    textSize = 72f
-                    text = seconds.toString()
-                }
-                val tip = TextView(this).apply {
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
-                    textSize = 16f
-                    text = "闲置守护:${seconds} 秒后关闭前台并锁屏\n点按任意位置取消"
-                }
-                card.addView(count)
-                val tipLp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = pad }
-                card.addView(tip, tipLp)
-                root.addView(
-                    card,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        Gravity.CENTER
-                    )
-                )
-
-                var remaining = seconds
-                val ticker = object : Runnable {
-                    override fun run() {
-                        if (settled) return
-                        remaining -= 1
-                        if (remaining <= 0) {
-                            proceed()
-                        } else {
-                            count.text = remaining.toString()
-                            ui.postDelayed(this, 1000)
-                        }
-                    }
-                }
-                root.setOnTouchListener { _, e ->
-                    if (e.actionMasked == MotionEvent.ACTION_DOWN) {
-                        ui.removeCallbacks(ticker)
-                        cancel()
-                        true
-                    } else false
-                }
-
-                val lp = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                    PixelFormat.TRANSLUCENT
-                )
-                warnRoot = root
-                wm.addView(root, lp)
-                ui.postDelayed(ticker, 1000)
-            } catch (t: Throwable) {
-                if (!settled) { settled = true; dismissKillWarning(); onProceed() }
-            }
-        }
-    }
-
-    /** 移除当前提示悬浮层(若有)。可在任意线程调用,内部切主线程。 */
-    fun dismissKillWarning() {
-        val root = warnRoot ?: return
-        warnRoot = null
-        ui.post {
-            runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(root) }
-        }
-    }
 
     /**
      * Real-time foreground package by window AREA, not focus: TV/box video
@@ -225,11 +112,6 @@ class IdleAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        ui.removeCallbacksAndMessages(null)
-        warnRoot?.let { r ->
-            runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(r) }
-        }
-        warnRoot = null
         instance = null
         super.onDestroy()
     }
