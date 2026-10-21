@@ -96,7 +96,8 @@ class IdleGuardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         refreshNotification()
         if (intent?.getBooleanExtra(EXTRA_KILL_NOW, false) == true) {
-            proceedToKillAndLock()
+            savePendingPkg(CurrentApp.pkg(this))
+            beginExitAndKill()
         } else {
             rescheduleIfMonitoring()
         }
@@ -149,39 +150,16 @@ class IdleGuardService : Service() {
 
         savePendingPkg(pkg)
 
-        if (pkg == YangshipinGuide.PKG && SettingsStore.whitelistCctv(this)) {
-            Logger.log(this, "触发执行 → 央视频白名单:引导到CCTV1(不杀不锁不静音)")
-            state = State.GUIDING
-            refreshNotification()
-            YangshipinGuide.run(this) { guideDesc ->
-                Logger.log(this, "央视频引导 → $guideDesc")
-                state = State.MONITORING
-                rescheduleIfMonitoring()
-                refreshNotification()
-            }
-            return
-        }
-
-        ActionRunner.muteNow(this)
-        ActionRunner.leaveApp(this, pkg) { desc ->
-            val cd = SettingsStore.countdownMillis(this)
-            if (cd <= 0L) {
-                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
-                proceedToKillAndLock()
-            } else {
-                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})  进入 ${cd / 60_000} 分钟关闭倒计时")
-                state = State.WAIT_KILL
-                KillScheduler.schedule(this, cd)
-                refreshNotification()
-            }
-        }
+        // 央视频不再特殊豁免:触发即先播语音倒计时,这期间完全不碰前台 App;
+        // 10 秒内触屏取消,数到 0 才 静音→退出→杀→锁。
+        startVoiceCountdownThenAct()
     }
 
     /** Called from KillAlarmReceiver when the kill countdown elapses. */
     fun onKillAlarm() {
         if (state != State.WAIT_KILL) return
         Logger.log(this, "关闭倒计时结束 → 执行清理+锁屏")
-        proceedToKillAndLock()
+        killAndLock(loadPendingPkg())
     }
 
     /** Settings changed while waiting for the kill countdown. */
@@ -190,7 +168,7 @@ class IdleGuardService : Service() {
         val cd = SettingsStore.countdownMillis(this)
         if (cd <= 0L) {
             Logger.log(this, "倒计时已改为0 → 立即执行清理+锁屏")
-            proceedToKillAndLock()
+            killAndLock(loadPendingPkg())
         } else {
             KillScheduler.schedule(this, cd)
         }
@@ -207,24 +185,37 @@ class IdleGuardService : Service() {
         refreshNotification()
     }
 
-    private fun proceedToKillAndLock() {
+    private fun startVoiceCountdownThenAct() {
         val a = alert
-        if (a == null) { doKillAndLock(); return }
-        // 执行前播报"即将10秒息屏,倒计时开始 10,9,8…";10 秒内用户触屏可取消
+        if (a == null) { beginExitAndKill(); return }
+        // 触发先播提示音,这期间不静音、不退出、不碰前台 App;10 秒内触屏可取消
         state = State.COUNTDOWN
         refreshNotification()
-        // 提前静音会让播报听不见:进倒计时前临时恢复音量,doKillAndLock 执行时再静音
-        ActionRunner.restoreVolume(this)
         Logger.log(this, "即将 ${COUNTDOWN_SECONDS} 秒息屏，倒计时开始（触屏可取消）")
-        a.startCountdown(COUNTDOWN_SECONDS) { doKillAndLock() }
+        a.startCountdown(COUNTDOWN_SECONDS) { beginExitAndKill() }
     }
 
-    private fun doKillAndLock() {
+    private fun beginExitAndKill() {
+        val pkg = loadPendingPkg()
+        ActionRunner.muteNow(this)
+        ActionRunner.leaveApp(this, pkg) { desc ->
+            val cd = SettingsStore.countdownMillis(this)
+            if (cd <= 0L) {
+                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
+                killAndLock(pkg)
+            } else {
+                Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})  进入 ${cd / 60_000} 分钟关闭倒计时")
+                state = State.WAIT_KILL
+                KillScheduler.schedule(this, cd)
+                refreshNotification()
+            }
+        }
+    }
+
+    private fun killAndLock(pkg: String?) {
         state = State.ASLEEP
         asleepSinceMs = SystemClock.elapsedRealtime()
         KillScheduler.cancel(this)
-        ActionRunner.muteNow(this)
-        val pkg = loadPendingPkg()
         clearPendingPkg()
         ActionRunner.killForeground(this, pkg) {
             handler.postDelayed({ ActionRunner.lockScreen(this) }, 800L)
@@ -301,7 +292,7 @@ class IdleGuardService : Service() {
             }
             State.MONITORING -> rescheduleIfMonitoring()
             State.WAIT_KILL -> { /* kill alarm owns this state */ }
-            State.COUNTDOWN -> { /* 语音倒计时进行中,由 doKillAndLock/cancelCountdown 收尾 */ }
+            State.COUNTDOWN -> { /* 语音倒计时进行中,由 beginExitAndKill/cancelCountdown 收尾 */ }
             State.GUIDING -> { /* guide in progress */ }
         }
     }
