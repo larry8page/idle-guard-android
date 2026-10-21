@@ -191,8 +191,12 @@ class IdleGuardService : Service() {
         // 触发先播提示音,这期间不静音、不退出、不碰前台 App;10 秒内触屏可取消
         state = State.COUNTDOWN
         refreshNotification()
+        IdleAccessibilityService.instance?.showCancelCatcher { cancelCountdown() }
         Logger.log(this, "即将 ${COUNTDOWN_SECONDS} 秒息屏，倒计时开始（触屏可取消）")
-        a.startCountdown(COUNTDOWN_SECONDS) { beginExitAndKill() }
+        a.startCountdown(COUNTDOWN_SECONDS) {
+            IdleAccessibilityService.instance?.dismissCancelCatcher()
+            beginExitAndKill()
+        }
     }
 
     private fun beginExitAndKill() {
@@ -224,10 +228,12 @@ class IdleGuardService : Service() {
     }
 
     private fun cancelCountdown() {
+        if (state != State.COUNTDOWN) return // 捕获层与无障碍点击可能同时触发,只认第一次
         alert?.stop()
+        IdleAccessibilityService.instance?.dismissCancelCatcher()
         clearPendingPkg()
         state = State.MONITORING
-        Logger.log(this, "用户操作 → 打断息屏倒计时，恢复监测")
+        Logger.log(this, "用户操作 → 打断息屏倒计时，取消预定操作并恢复监测")
         rescheduleIfMonitoring()
         refreshNotification()
     }

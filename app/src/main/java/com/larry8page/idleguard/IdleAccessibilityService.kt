@@ -4,15 +4,20 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.FrameLayout
 
 /**
  * Watches for real user-interaction events to reset the idle timer (taps only:
@@ -55,6 +60,51 @@ class IdleAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() { /* no-op */ }
+
+    // ---- 语音倒计时期间的"任意触摸即取消"透明捕获层(不可见,非弹窗) ----
+
+    private val ui = Handler(Looper.getMainLooper())
+    private var cancelCatcher: View? = null
+
+    /**
+     * 盖一层几乎全透明的全屏层捕获触摸。任意按下 → [onCancel](调用方负责停止播报、
+     * 取消预定操作、重置监测)。因为普通点击常不产生 TYPE_VIEW_CLICKED,只靠无障碍
+     * 事件不可靠,所以用它来保证"触屏就能取消"。
+     */
+    fun showCancelCatcher(onCancel: () -> Unit) {
+        ui.post {
+            dismissCancelCatcher()
+            try {
+                val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+                val v = FrameLayout(this)
+                v.setBackgroundColor(0x01000000) // alpha=1/255,肉眼不可见但可接收触摸
+                v.isClickable = true
+                v.setOnTouchListener { _, e ->
+                    if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                        dismissCancelCatcher()
+                        onCancel()
+                        true
+                    } else false
+                }
+                val lp = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    PixelFormat.TRANSLUCENT
+                )
+                cancelCatcher = v
+                wm.addView(v, lp)
+            } catch (t: Throwable) { /* 盖不上就退回仅靠 click 事件取消 */ }
+        }
+    }
+
+    fun dismissCancelCatcher() {
+        val v = cancelCatcher ?: return
+        cancelCatcher = null
+        ui.post { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } }
+    }
 
     /**
      * Real-time foreground package by window AREA, not focus: TV/box video
@@ -112,6 +162,11 @@ class IdleAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        ui.removeCallbacksAndMessages(null)
+        cancelCatcher?.let { c ->
+            runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(c) }
+        }
+        cancelCatcher = null
         instance = null
         super.onDestroy()
     }
