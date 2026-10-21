@@ -30,7 +30,7 @@ import androidx.core.content.ContextCompat
  */
 class IdleGuardService : Service() {
 
-    enum class State { MONITORING, WAIT_KILL, GUIDING, ASLEEP }
+    enum class State { MONITORING, WAIT_KILL, WARNING, GUIDING, ASLEEP }
 
     @Volatile private var state: State = State.MONITORING
     private var screenReceiver: BroadcastReceiver? = null
@@ -53,6 +53,7 @@ class IdleGuardService : Service() {
         private const val CCTV_POLL_MS = 10_000L
         private const val CCTV_STEP_MS = 4_000L
         private const val CCTV_AD_WINDOW_MS = 30_000L
+        private const val WARN_SECONDS = 10
 
         @Volatile
         var instance: IdleGuardService? = null
@@ -124,6 +125,7 @@ class IdleGuardService : Service() {
                 }
             }
             State.WAIT_KILL -> abortKill()
+            State.WARNING -> { /* 全屏提示自行处理:点按即取消,避免重复 */ }
             State.GUIDING -> { /* guide owns the UI right now */ }
             State.ASLEEP -> onUserReturned("触屏")
         }
@@ -202,6 +204,30 @@ class IdleGuardService : Service() {
     }
 
     private fun proceedToKillAndLock() {
+        val svc = IdleAccessibilityService.instance
+        if (svc == null) {
+            doKillAndLock()
+            return
+        }
+        // 执行前给一个 10 秒的全屏提示;用户点按任意处即取消本次 关闭+锁屏。
+        state = State.WARNING
+        refreshNotification()
+        svc.showKillWarning(
+            WARN_SECONDS,
+            onCancel = {
+                Logger.log(this, "用户在 ${WARN_SECONDS} 秒提示内操作 → 取消本次 关闭+锁屏")
+                KillScheduler.cancel(this)
+                clearPendingPkg()
+                state = State.MONITORING
+                rescheduleIfMonitoring()
+                refreshNotification()
+            },
+            onProceed = { doKillAndLock() }
+        )
+    }
+
+    private fun doKillAndLock() {
+        IdleAccessibilityService.instance?.dismissKillWarning()
         state = State.ASLEEP
         asleepSinceMs = SystemClock.elapsedRealtime()
         KillScheduler.cancel(this)
@@ -260,7 +286,7 @@ class IdleGuardService : Service() {
     /** Called by the 10-min watchdog; also repairs lost alarms after OEM kills. */
     fun watchdogTick() {
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-        if (pm.isInteractive && state != State.ASLEEP && state != State.WAIT_KILL) {
+        if (pm.isInteractive && state != State.ASLEEP && state != State.WAIT_KILL && state != State.WARNING) {
             // process may have restarted mid-mute: markers persisted but nobody restored
             ActionRunner.restoreVolume(this)
             ActionRunner.restoreHidden(this)
@@ -273,6 +299,7 @@ class IdleGuardService : Service() {
             }
             State.MONITORING -> rescheduleIfMonitoring()
             State.WAIT_KILL -> { /* kill alarm owns this state */ }
+            State.WARNING -> { /* 全屏提示倒计时进行中 */ }
             State.GUIDING -> { /* guide in progress */ }
         }
     }
@@ -394,6 +421,7 @@ class IdleGuardService : Service() {
     private fun stateText(): String = when (state) {
         State.MONITORING -> getString(R.string.notif_monitoring, SettingsStore.idleMinutes(this))
         State.WAIT_KILL -> getString(R.string.notif_waiting_kill, SettingsStore.countdownMinutes(this))
+        State.WARNING -> getString(R.string.notif_warning)
         State.GUIDING -> getString(R.string.notif_guiding)
         State.ASLEEP -> getString(R.string.notif_asleep)
     }
