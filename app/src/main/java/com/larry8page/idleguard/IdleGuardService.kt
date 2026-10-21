@@ -30,7 +30,7 @@ import androidx.core.content.ContextCompat
  */
 class IdleGuardService : Service() {
 
-    enum class State { MONITORING, WAIT_KILL, GUIDING, ASLEEP }
+    enum class State { MONITORING, WAIT_KILL, COUNTDOWN, GUIDING, ASLEEP }
 
     @Volatile private var state: State = State.MONITORING
     private var screenReceiver: BroadcastReceiver? = null
@@ -42,6 +42,7 @@ class IdleGuardService : Service() {
     private var wasCctvForeground = false
     @Volatile private var cctvSessionActive = false
     private var cctvSessionStartMs = 0L
+    private var alert: Alert? = null
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
@@ -53,6 +54,7 @@ class IdleGuardService : Service() {
         private const val CCTV_POLL_MS = 10_000L
         private const val CCTV_STEP_MS = 4_000L
         private const val CCTV_AD_WINDOW_MS = 30_000L
+        private const val COUNTDOWN_SECONDS = 10
 
         @Volatile
         var instance: IdleGuardService? = null
@@ -81,6 +83,7 @@ class IdleGuardService : Service() {
         startForeground(NOTIF_ID, buildNotification())
         registerScreenReceiver()
         WatchdogScheduler.schedule(this)
+        alert = Alert(this)
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         if (pm.isInteractive) {
             ActionRunner.restoreVolume(this)
@@ -104,6 +107,8 @@ class IdleGuardService : Service() {
         if (instance === this) instance = null
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
         screenReceiver = null
+        alert?.shutdown()
+        alert = null
         stopCctvPoll()
         TimerScheduler.cancel(this)
         KillScheduler.cancel(this)
@@ -124,6 +129,7 @@ class IdleGuardService : Service() {
                 }
             }
             State.WAIT_KILL -> abortKill()
+            State.COUNTDOWN -> cancelCountdown()
             State.GUIDING -> { /* guide owns the UI right now */ }
             State.ASLEEP -> onUserReturned("触屏")
         }
@@ -202,14 +208,36 @@ class IdleGuardService : Service() {
     }
 
     private fun proceedToKillAndLock() {
+        val a = alert
+        if (a == null) { doKillAndLock(); return }
+        // 执行前播报"即将10秒息屏,倒计时开始 10,9,8…";10 秒内用户触屏可取消
+        state = State.COUNTDOWN
+        refreshNotification()
+        // 提前静音会让播报听不见:进倒计时前临时恢复音量,doKillAndLock 执行时再静音
+        ActionRunner.restoreVolume(this)
+        Logger.log(this, "即将 ${COUNTDOWN_SECONDS} 秒息屏，倒计时开始（触屏可取消）")
+        a.startCountdown(COUNTDOWN_SECONDS) { doKillAndLock() }
+    }
+
+    private fun doKillAndLock() {
         state = State.ASLEEP
         asleepSinceMs = SystemClock.elapsedRealtime()
         KillScheduler.cancel(this)
+        ActionRunner.muteNow(this)
         val pkg = loadPendingPkg()
         clearPendingPkg()
         ActionRunner.killForeground(this, pkg) {
             handler.postDelayed({ ActionRunner.lockScreen(this) }, 800L)
         }
+        refreshNotification()
+    }
+
+    private fun cancelCountdown() {
+        alert?.stop()
+        clearPendingPkg()
+        state = State.MONITORING
+        Logger.log(this, "用户操作 → 打断息屏倒计时，恢复监测")
+        rescheduleIfMonitoring()
         refreshNotification()
     }
 
@@ -260,7 +288,7 @@ class IdleGuardService : Service() {
     /** Called by the 10-min watchdog; also repairs lost alarms after OEM kills. */
     fun watchdogTick() {
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-        if (pm.isInteractive && state != State.ASLEEP && state != State.WAIT_KILL) {
+        if (pm.isInteractive && state != State.ASLEEP && state != State.WAIT_KILL && state != State.COUNTDOWN) {
             // process may have restarted mid-mute: markers persisted but nobody restored
             ActionRunner.restoreVolume(this)
             ActionRunner.restoreHidden(this)
@@ -273,6 +301,7 @@ class IdleGuardService : Service() {
             }
             State.MONITORING -> rescheduleIfMonitoring()
             State.WAIT_KILL -> { /* kill alarm owns this state */ }
+            State.COUNTDOWN -> { /* 语音倒计时进行中,由 doKillAndLock/cancelCountdown 收尾 */ }
             State.GUIDING -> { /* guide in progress */ }
         }
     }
@@ -394,6 +423,7 @@ class IdleGuardService : Service() {
     private fun stateText(): String = when (state) {
         State.MONITORING -> getString(R.string.notif_monitoring, SettingsStore.idleMinutes(this))
         State.WAIT_KILL -> getString(R.string.notif_waiting_kill, SettingsStore.countdownMinutes(this))
+        State.COUNTDOWN -> getString(R.string.notif_countdown)
         State.GUIDING -> getString(R.string.notif_guiding)
         State.ASLEEP -> getString(R.string.notif_asleep)
     }
