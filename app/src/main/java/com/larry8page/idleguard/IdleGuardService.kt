@@ -33,6 +33,7 @@ class IdleGuardService : Service() {
     enum class State { MONITORING, WAIT_KILL, COUNTDOWN, GUIDING, ASLEEP }
 
     @Volatile private var state: State = State.MONITORING
+    @Volatile private var screenOn: Boolean = true
     private var screenReceiver: BroadcastReceiver? = null
     private var lastResetLogMs: Long = 0L
     private var asleepSinceMs: Long = 0L
@@ -85,6 +86,7 @@ class IdleGuardService : Service() {
         WatchdogScheduler.schedule(this)
         alert = Alert(this)
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        screenOn = pm.isInteractive
         if (pm.isInteractive) {
             ActionRunner.restoreVolume(this)
             ActionRunner.restoreHidden(this)
@@ -140,6 +142,7 @@ class IdleGuardService : Service() {
     fun onIdleFired() {
         if (state != State.MONITORING) return
         if (!SettingsStore.isEnabled(this)) return
+        if (!screenOn) return // 已息屏：不触发语音倒计时/浮层，什么都不做
 
         val pkg = CurrentApp.pkg(this)
 
@@ -256,16 +259,38 @@ class IdleGuardService : Service() {
             override fun onReceive(ctx: Context?, i: Intent?) {
                 when (i?.action) {
                     Intent.ACTION_USER_PRESENT -> onUserReturned("解锁")
-                    Intent.ACTION_SCREEN_ON -> if (state == State.ASLEEP) onUserReturned("亮屏")
+                    Intent.ACTION_SCREEN_ON -> onScreenOn()
+                    Intent.ACTION_SCREEN_OFF -> onScreenOff()
                 }
             }
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_USER_PRESENT)
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
         }
         runCatching { ContextCompat.registerReceiver(this, r, filter, ContextCompat.RECEIVER_NOT_EXPORTED) }
         screenReceiver = r
+    }
+
+    /** Screen turned off: stop every countdown/timer/guide — nothing to guard a dark screen. */
+    private fun onScreenOff() {
+        screenOn = false
+        if (state == State.COUNTDOWN) {
+            cancelCountdown() // 立刻停语音倒计时 + 撤全屏取消浮层
+        }
+        TimerScheduler.cancel(this) // 息屏期间不再触发闲置
+        Logger.log(this, "息屏 → 停止一切倒计时/轮询/引导")
+    }
+
+    /** Screen turned on: resume monitoring. */
+    private fun onScreenOn() {
+        screenOn = true
+        if (state == State.ASLEEP) {
+            onUserReturned("亮屏")
+        } else {
+            rescheduleIfMonitoring()
+        }
     }
 
     private fun onUserReturned(reason: String) {
@@ -321,6 +346,7 @@ class IdleGuardService : Service() {
             try {
                 if (!SettingsStore.isEnabled(this@IdleGuardService) ||
                     !SettingsStore.whitelistCctv(this@IdleGuardService) ||
+                    !screenOn ||
                     state != State.MONITORING
                 ) return
                 val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
