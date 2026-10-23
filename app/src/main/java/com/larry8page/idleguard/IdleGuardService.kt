@@ -122,6 +122,10 @@ class IdleGuardService : Service() {
 
     /** A real user tap was observed. */
     fun onUserActivity() {
+        // 真实点击必然意味着屏幕亮着、用户就在屏幕前。部分 OEM/Freeme ROM 只发
+        // ACTION_SCREEN_OFF、唤醒却不发 ACTION_SCREEN_ON,会让 screenOn 卡死在 false,
+        // 导致守护一次息屏后永远恢复不过来。用"有人触屏"这个硬信号复位息屏闸门。
+        screenOn = true
         when (state) {
             State.MONITORING -> {
                 rescheduleIfMonitoring()
@@ -291,9 +295,12 @@ class IdleGuardService : Service() {
         } else {
             rescheduleIfMonitoring()
         }
+        Logger.log(this, "亮屏 → 恢复监测 (SCREEN_ON 广播到达)")
     }
 
     private fun onUserReturned(reason: String) {
+        // 解锁 / 用户返回必然意味着屏幕是亮的:复位息屏闸门,不依赖 SCREEN_ON 广播。
+        screenOn = true
         // Unconditional: these self-guard on persisted markers. After an OEM
         // process kill the in-memory ASLEEP state is lost, and the old guarded
         // call used to skip volume restore forever.
