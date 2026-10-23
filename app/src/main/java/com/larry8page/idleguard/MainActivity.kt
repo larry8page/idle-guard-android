@@ -147,11 +147,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun isAccessibilityEnabled(): Boolean {
         val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val expected = ComponentName(packageName, IdleAccessibilityService::class.java.name).flattenToString()
-        return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            .any { it.resolveInfo.serviceInfo.packageName == packageName && it.resolveInfo.serviceInfo.name == IdleAccessibilityService::class.java.name } ||
-            (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-                ?.split(':')?.any { it.equals(expected, ignoreCase = true) } == true)
+        val cn = ComponentName(packageName, IdleAccessibilityService::class.java.name)
+        if (am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                .any { it.resolveInfo.serviceInfo.packageName == packageName &&
+                        it.resolveInfo.serviceInfo.name == IdleAccessibilityService::class.java.name }
+        ) return true
+        // 归一化比对:系统设置写入的是全名 "pkg/pkg.Class",脚本/ROM 可能写成短名 "pkg/.Class"。
+        // 用 ComponentName.unflattenFromString 把每条解析成完整包名+类名再比较,
+        // 避免旧的 equals(expected) 因短名/大小写差异把"已开启"误判成"未开启"。
+        val secure = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            ?: return false
+        return secure.split(':').any { raw ->
+            val parsed = runCatching { ComponentName.unflattenFromString(raw.trim()) }.getOrNull()
+            parsed?.packageName == cn.packageName && parsed.className == cn.className
+        }
     }
 
     private fun isDeviceAdminActive(): Boolean {
