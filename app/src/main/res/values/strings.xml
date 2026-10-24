@@ -2,14 +2,14 @@
 <resources>
     <string name="app_name">闲置守护</string>
     <string name="accessibility_service_label">闲置守护（无障碍）</string>
-    <string name="accessibility_service_description">用途一：检测触屏点击以判断是否闲置；用途二：触发时自动打开系统“应用信息”页并点击“强行停止”以关闭前台应用。除该设置页面外，不会读取或记录其它应用的窗口内容。</string>
+    <string name="accessibility_service_description">用途一：检测触屏点击以判断是否闲置；用途二：触发时发送返回键（双击返回）/回到桌面退出前台应用；用途三：触发时自动打开系统“应用信息”页并点击“强行停止”以关闭前台应用。除该设置页面外，不会读取或记录其它应用的窗口内容。</string>
 
-    <string name="header_subtitle">"闲置"＝没有任何触屏操作。到点先回桌面，再按"倒计时关闭"强制停止前台App并锁屏。</string>
+    <string name="header_subtitle">"闲置"＝没有任何触屏操作。到点先退出前台App（优先双击返回），再按"倒计时关闭"强制停止前台App并锁屏。</string>
 
     <!-- Notification -->
     <string name="notif_channel_name">闲置守护服务</string>
     <string name="notif_title">闲置守护运行中</string>
-    <string name="notif_monitoring">闲置 %1$d 分钟 → 回桌面并执行关闭</string>
+    <string name="notif_monitoring">闲置 %1$d 分钟 → 退出前台App并执行关闭</string>
     <string name="notif_waiting_kill">关闭倒计时进行中（%1$d 分钟），触屏可打断</string>
     <string name="notif_asleep">已清理并锁屏，等你回来恢复监测</string>
     <string name="notif_guiding">正在引导央视频到 CCTV1…</string>
@@ -25,7 +25,7 @@
     <string name="label_enable">启用守护</string>
     <string name="label_idle_minutes">闲置时长（分钟）</string>
     <string name="label_countdown">倒计时关闭（分钟，0=关）</string>
-    <string name="hint_countdown">0＝闲置到点后直接 回桌面→杀前台→锁屏；&gt;0＝先回桌面，再等这个倒计时，期间触屏可打断</string>
+    <string name="hint_countdown">0＝闲置到点后直接 退出前台→杀前台→锁屏；&gt;0＝先退出前台，再等这个倒计时，期间触屏可打断</string>
 
     <string name="label_log_enabled">写日志（记录触发与引导）</string>
     <string name="hint_log_enabled">勾选=持续写入"触发日志";取消后不再记录任何日志(历史日志保留,可在日志页清空)</string>
@@ -47,5 +47,5 @@
 
     <string name="toast_missing_perms">请先授予：%1$s</string>
     <string name="toast_cant_open_settings">无法跳转到系统设置，请手动前往。</string>
-    <string name="toast_test_triggered">已执行一次完整触发：回桌面 → 杀前台 → 锁屏。</string>
+    <string name="toast_test_triggered">已执行一次完整触发：退出前台 → 杀前台 → 锁屏。</string>
 </resources>

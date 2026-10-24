@@ -2,7 +2,7 @@
 
 Android arm64-v8a 后台守护 App。检测到系统闲置达到设定时长后，自动执行：
 
-1. 通过无障碍服务发送 `GLOBAL_ACTION_HOME`，回到桌面（免 root 关掉前台 App 的近似做法）
+1. 退出前台 App：优先「双击返回」（连发两次 `GLOBAL_ACTION_BACK`，约 120ms），已退出即结束；仅当目标仍在前台时才回落到 `GLOBAL_ACTION_HOME` 回桌面（免 root 关掉前台 App 的近似做法）
 2. 通过勿扰权限启用 `INTERRUPTION_FILTER_NONE`，静音
 3. 通过设备管理器 `lockNow()`，息屏
 
@@ -15,7 +15,7 @@ Android arm64-v8a 后台守护 App。检测到系统闲置达到设定时长后�
 - `ACCESS_NOTIFICATION_POLICY` — 勿扰静音
 - `SCHEDULE_EXACT_ALARM` — 精准计时
 - 设备管理员（Device Admin，仅 `force-lock`）
-- 无障碍服务（用户交互检测 + 回桌面）
+- 无障碍服务（用户交互检测 + 双击返回退出前台 / 回桌面兜底）
 
 ## 构建
 
