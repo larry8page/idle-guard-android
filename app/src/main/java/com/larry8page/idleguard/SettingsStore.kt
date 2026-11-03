@@ -43,7 +43,7 @@ object SettingsStore {
 
     fun countdownMillis(ctx: Context): Long = countdownMinutes(ctx) * 60_000L
 
-    /** When 央视频 is the foreground app at trigger time, guide it to CCTV1 instead of kill+lock. */
+    /** When 央视频 is the foreground app at trigger time, guide it to CCTV6 instead of kill+lock. */
     fun whitelistCctv(ctx: Context): Boolean =
         prefs(ctx).getBoolean(KEY_WHITELIST_CCTV, true)
 

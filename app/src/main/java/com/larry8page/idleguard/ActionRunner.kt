@@ -12,9 +12,9 @@ import android.os.Looper
 /**
  * Idle-time actions (mute/DND removed by design — killing the app is the point):
  *
- *  leaveApp()       — 先「双击返回」(连发两次 GLOBAL_ACTION_BACK, 约120ms);若目标
- *                     已退出即结束(不再 HOME, 避开视频 App 的悬浮小窗),仍在前台才
- *                     补一记 BACK、再兜底 HOME。
+ *  leaveApp()       — 先连按「返回」最多 3 次(GLOBAL_ACTION_BACK, 每下间隔约400ms),
+ *                     每下之后复查目标是否还在前台,一旦退出即结束(不再 HOME, 避开视频
+ *                     App 的悬浮小窗);按满 3 次仍未退才兜底 HOME。
  *  goHome()         — HOME via AccessibilityService.
  *  killForeground() — kill the identified app, best available path:
  *                       1. device owner            → setApplicationHidden(true)
@@ -31,7 +31,8 @@ import android.os.Looper
  */
 object ActionRunner {
     private const val KILL_DELAY_MS = 800L
-    private const val DOUBLE_BACK_MS = 120L // 双击返回两击之间的间隔(ms)
+    private const val BACK_MAX = 3 // 退出前台时先连按返回的最大次数
+    private const val BACK_GAP_MS = 400L // 每次返回之间的间隔(ms)
     private const val STATE_PREFS = "idle_guard_state"
     private const val KEY_HIDDEN_PKG = "hidden_pkg"
 
@@ -49,14 +50,11 @@ object ActionRunner {
     }
 
     /**
-     * Leave the foreground app by DOUBLE-TAPPING BACK first, only falling back to
-     * HOME as a last resort. Many apps close a page / exit precisely on two quick
-     * BACK presses, so we first send [AccessibilityService.GLOBAL_ACTION_BACK]
-     * twice (~[DOUBLE_BACK_MS] apart). We then re-check whether [target] is still
-     * the foreground app:
-     *   - exited  → finish immediately, do NOT press HOME (avoids the floating
-     *               PiP window these video apps turn HOME into).
-     *   - present → original fallback: one more BACK, and if still present, HOME.
+     * Leave the foreground app by pressing BACK up to [BACK_MAX] times FIRST,
+     * re-checking after each press whether [target] is still the foreground app;
+     * as soon as it has exited we stop and do NOT press HOME (avoids the floating
+     * PiP window these video apps turn HOME into). Only after the full [BACK_MAX]
+     * presses, if the target is STILL foreground, do we fall back to HOME.
      * Callback gets a short description.
      */
     fun leaveApp(ctx: Context, target: String?, onDone: (String) -> Unit) {
@@ -73,30 +71,24 @@ object ActionRunner {
         fun stillThere(): Boolean = target != null && CurrentApp.pkg(app) == target
 
         var backs = 0
-        // 第一击。
-        if (back()) backs++
-        // 第二击(约 120ms 后,模拟双击返回)。
-        h.postDelayed({
-            if (back()) backs++
-            // 双击后再等一瞬观察目标是否已退出。
-            h.postDelayed({
+        // 递归:每拍先判断是否已退出→退了就地结束;否则再按一记 BACK(最多 BACK_MAX 下),
+        // 按满仍未退才 HOME 兜底。
+        val step = object : Runnable {
+            override fun run() {
                 if (!stillThere()) {
-                    // 双击返回即已退出:直接结束,不再按 HOME。
-                    onDone("双击返回退出")
-                    return@postDelayed
+                    onDone(if (backs > 0) "BACK×${backs}退出" else "无需返回,已不在前台")
+                    return
                 }
-                // 仍在前台 → 走原有兜底:再补一记 BACK,仍不退才 HOME。
+                if (backs >= BACK_MAX) {
+                    goHome(app)
+                    onDone("BACK×${backs}未退出,已HOME兜底")
+                    return
+                }
                 if (back()) backs++
-                h.postDelayed({
-                    if (stillThere()) {
-                        goHome(app)
-                        onDone("双击返回+BACK×${backs}未退出,已HOME兜底")
-                    } else {
-                        onDone("双击返回未退出,BACK×${backs}退出(兜底)")
-                    }
-                }, 600)
-            }, DOUBLE_BACK_MS)
-        }, DOUBLE_BACK_MS)
+                h.postDelayed(this, BACK_GAP_MS)
+            }
+        }
+        step.run()
     }
 
     fun killForeground(ctx: Context, pkg: String?, onDone: ((String) -> Unit)? = null) {

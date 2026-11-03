@@ -9,7 +9,7 @@ import android.os.Looper
  * Whitelist behavior for 央视频 (com.cctv.yangshipin.app.androidp).
  *
  * Goal: when 央视频 is the foreground app (idle trigger OR the 10s foreground
- * poll), drive it to CCTV1 live — WITHOUT ever blind-tapping coordinates.
+ * poll), drive it to CCTV6 live — WITHOUT ever blind-tapping coordinates.
  *
  * Design: a SELF-CORRECTING STATE MACHINE. Each 10s tick performs only the ONE
  * next action that matches the current screen state, then returns. This avoids a
@@ -23,14 +23,16 @@ import android.os.Looper
  *    VARIES per ad → we NEVER tap coordinates; a node-less ad is left to auto-dismiss
  *    and retried on the next tick.
  *  - The home channel strip is self-drawn inside a horizontal ViewPager: a synthetic
- *    horizontal swipe is swallowed → CCTV1 is reached via the "展开全部频道" grid,
+ *    horizontal swipe is swallowed → CCTV6 is reached via the "展开全部频道" grid,
  *    whose cells are real nodes.
  */
 object YangshipinGuide {
     const val PKG = "com.cctv.yangshipin.app.androidp"
 
-    private val CCTV1_PAGE = listOf("CCTV-1栏目", "CCTV1栏目")
-    private val CCTV1_CELL = listOf("综合频道")
+    private val CCTV6_PAGE = listOf("CCTV-6栏目", "CCTV6栏目")
+    // CCTV6 是电影频道, 央视频"展开全部频道"网格里单元格用中文名"电影频道";
+    // 同时兼容可能的 "CCTV-6"/"CCTV6" 显示变体(找不到即静默跳过)。
+    private val CCTV6_CELL = listOf("电影频道", "CCTV-6", "CCTV6")
 
     fun run(ctx: Context, onDone: (String) -> Unit) {
         val svc = IdleAccessibilityService.instance
@@ -46,19 +48,19 @@ object YangshipinGuide {
             if (svc.pressBack()) { onDone("横屏→BACK退全屏"); return }
         }
 
-        // 1) already on CCTV1 → nothing to do.
-        if (svc.hasNodeText(CCTV1_PAGE)) { onDone("已在CCTV1,无需引导"); return }
+        // 1) already on CCTV6 → nothing to do.
+        if (svc.hasNodeText(CCTV6_PAGE)) { onDone("已在CCTV6,无需引导"); return }
 
-        // 2) grid open and CCTV1 cell visible → select it.
-        if (svc.clickNodeByText(CCTV1_CELL)) {
-            h.postDelayed({ onDone("选CCTV1(网格)") }, 1200); return
+        // 2) grid open and CCTV6 cell visible → select it.
+        if (svc.clickNodeByText(CCTV6_CELL)) {
+            h.postDelayed({ onDone("选CCTV6(网格)") }, 1200); return
         }
 
-        // 3) grid open (收起 present) but CCTV1 not visible → ensure CCTV tab, scroll up.
+        // 3) grid open (收起 present) but CCTV6 not visible → ensure CCTV tab, scroll up.
         if (svc.hasNodeText(listOf("收起"))) {
             svc.clickNodeByText(listOf("CCTV"))
             svc.swipeRel(0.5f, 0.5f, 0.5f, 0.85f, 400L)
-            h.postDelayed({ onDone("网格:确保CCTV页签+上滚找CCTV1") }, 800); return
+            h.postDelayed({ onDone("网格:确保CCTV页签+上滚找CCTV6") }, 800); return
         }
 
         // 4) on the TV page → open the 展开全部频道 grid.

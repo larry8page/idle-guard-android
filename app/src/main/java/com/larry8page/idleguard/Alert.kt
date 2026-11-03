@@ -11,8 +11,8 @@ import android.os.Looper
 /**
  * 息屏执行前的语音倒计时提示(用打包进 App 的预录音频,彻底不依赖系统 TTS 引擎)。
  *
- * 流程:先播开场白"即将十秒息屏,倒计时开始"(约 3.3s),停顿到开场白结束后,
- * 每秒播放一个数字音频 10、9、…、1;数到 0 触发 [onDone]。任意时刻调用 [stop]
+ * 流程:先播开场白"即将十八秒息屏,倒计时开始"(约 3.5s),停顿到开场白结束后,
+ * 每秒播放一个数字音频 18、17、…、1;数到 0 触发 [onDone]。任意时刻调用 [stop]
  * 即取消(用于用户触屏打断这一轮)。若某数字素材没加载上,退化为一次滴声,保证不静音。
  *
  * 走 USAGE_ASSISTANCE_ACCESSIBILITY 音频流:即使媒体被静音也仍能播出。
@@ -37,7 +37,7 @@ class Alert(ctx: Context) {
     private val digitIds = HashMap<Int, Int>()
 
     init {
-        for (n in 1..10) {
+        for (n in 1..18) {
             runCatching { pool.load(app, resFor(n), 1) }.getOrNull()?.let { digitIds[n] = it }
         }
     }
@@ -52,7 +52,15 @@ class Alert(ctx: Context) {
         7 -> R.raw.count_7
         8 -> R.raw.count_8
         9 -> R.raw.count_9
-        else -> R.raw.count_10
+        10 -> R.raw.count_10
+        11 -> R.raw.count_11
+        12 -> R.raw.count_12
+        13 -> R.raw.count_13
+        14 -> R.raw.count_14
+        15 -> R.raw.count_15
+        16 -> R.raw.count_16
+        17 -> R.raw.count_17
+        else -> R.raw.count_18
     }
 
     /** 是否有可用音频素材(开场白或数字任一加载成功)。 */
@@ -79,7 +87,7 @@ class Alert(ctx: Context) {
                 handler.postDelayed(this, 1000)
             }
         }
-        handler.postDelayed(tick, INTRO_DELAY_MS) // 等开场白(~3.3s)播完再开始念数字
+        handler.postDelayed(tick, INTRO_DELAY_MS) // 等开场白(~3.5s)播完再开始念数字
     }
 
     private fun playDigit(n: Int) {
@@ -107,5 +115,5 @@ class Alert(ctx: Context) {
         runCatching { pool.release() }
     }
 
-    companion object { private const val INTRO_DELAY_MS = 3400L }
+    companion object { private const val INTRO_DELAY_MS = 3600L }
 }

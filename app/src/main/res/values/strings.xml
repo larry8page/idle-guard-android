@@ -2,9 +2,9 @@
 <resources>
     <string name="app_name">闲置守护</string>
     <string name="accessibility_service_label">闲置守护（无障碍）</string>
-    <string name="accessibility_service_description">用途一：检测触屏点击以判断是否闲置；用途二：触发时发送返回键（双击返回）/回到桌面退出前台应用；用途三：触发时自动打开系统“应用信息”页并点击“强行停止”以关闭前台应用。除该设置页面外，不会读取或记录其它应用的窗口内容。</string>
+    <string name="accessibility_service_description">用途一：检测触屏点击以判断是否闲置；用途二：触发时连按返回键（最多 3 次）/回到桌面退出前台应用；用途三：触发时自动打开系统“应用信息”页并点击“强行停止”以关闭前台应用。除该设置页面外，不会读取或记录其它应用的窗口内容。</string>
 
-    <string name="header_subtitle">"闲置"＝没有任何触屏操作。到点先退出前台App（优先双击返回），再按"倒计时关闭"强制停止前台App并锁屏。</string>
+    <string name="header_subtitle">"闲置"＝没有任何触屏操作。到点先退出前台App（优先连按返回，最多3次），再按"倒计时关闭"强制停止前台App并锁屏。</string>
 
     <!-- Notification -->
     <string name="notif_channel_name">闲置守护服务</string>
@@ -12,8 +12,8 @@
     <string name="notif_monitoring">闲置 %1$d 分钟 → 退出前台App并执行关闭</string>
     <string name="notif_waiting_kill">关闭倒计时进行中（%1$d 分钟），触屏可打断</string>
     <string name="notif_asleep">已清理并锁屏，等你回来恢复监测</string>
-    <string name="notif_guiding">正在引导央视频到 CCTV1…</string>
-    <string name="notif_countdown">10 秒内可取消:即将息屏…</string>
+    <string name="notif_guiding">正在引导央视频到 CCTV6…</string>
+    <string name="notif_countdown">18 秒内可取消:即将息屏…</string>
 
     <!-- UI section headers -->
     <string name="section_settings">闲置设置</string>

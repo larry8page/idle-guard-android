@@ -39,7 +39,7 @@ class IdleGuardService : Service() {
     private var asleepSinceMs: Long = 0L
     // 央视频"冷启动单次引导"会话状态(见 pollRunnable):
     // 只有从"非央视频 → 央视频"的那一次冷启动才开一个窗口,窗口内跳广告并导航到
-    // CCTV1,到达 CCTV1 或超过 CCTV_AD_WINDOW_MS 即休眠,期间不反复刷日志/干预。
+    // CCTV6,到达 CCTV6 或超过 CCTV_AD_WINDOW_MS 即休眠,期间不反复刷日志/干预。
     private var wasCctvForeground = false
     @Volatile private var cctvSessionActive = false
     private var cctvSessionStartMs = 0L
@@ -55,7 +55,7 @@ class IdleGuardService : Service() {
         private const val CCTV_POLL_MS = 10_000L
         private const val CCTV_STEP_MS = 4_000L
         private const val CCTV_AD_WINDOW_MS = 30_000L
-        private const val COUNTDOWN_SECONDS = 10
+        private const val COUNTDOWN_SECONDS = 18
 
         @Volatile
         var instance: IdleGuardService? = null
@@ -158,7 +158,7 @@ class IdleGuardService : Service() {
         savePendingPkg(pkg)
 
         // 央视频不再特殊豁免:触发即先播语音倒计时,这期间完全不碰前台 App;
-        // 10 秒内触屏取消,数到 0 才 静音→退出→杀→锁。
+        // 18 秒内触屏取消,数到 0 才 静音→退出→杀→锁。
         startVoiceCountdownThenAct()
     }
 
@@ -195,7 +195,7 @@ class IdleGuardService : Service() {
     private fun startVoiceCountdownThenAct() {
         val a = alert
         if (a == null) { beginExitAndKill(); return }
-        // 触发先播提示音,这期间不静音、不退出、不碰前台 App;10 秒内触屏可取消
+        // 触发先播提示音,这期间不静音、不退出、不碰前台 App;18 秒内触屏可取消
         state = State.COUNTDOWN
         refreshNotification()
         IdleAccessibilityService.instance?.showCancelCatcher { cancelCountdown() }
@@ -368,7 +368,7 @@ class IdleGuardService : Service() {
                     cctvSessionStartMs = SystemClock.elapsedRealtime()
                     Logger.log(
                         this@IdleGuardService,
-                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV1后休眠"
+                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV6后休眠"
                     )
                 }
                 wasCctvForeground = isCctv
@@ -378,9 +378,9 @@ class IdleGuardService : Service() {
                     cctvSessionActive = false
                     return
                 }
-                // 无会话(本轮已到CCTV1/超时休眠,或只是停在央视频里没冷启动)→ 不干预、不写日志
+                // 无会话(本轮已到CCTV6/超时休眠,或只是停在央视频里没冷启动)→ 不干预、不写日志
                 if (!cctvSessionActive) return
-                // 窗口到点仍未到 CCTV1 → 休眠
+                // 窗口到点仍未到 CCTV6 → 休眠
                 if (SystemClock.elapsedRealtime() - cctvSessionStartMs > CCTV_AD_WINDOW_MS) {
                     cctvSessionActive = false
                     Logger.log(this@IdleGuardService, "央视频引导窗口超时 → 休眠,不再干预")
@@ -393,8 +393,8 @@ class IdleGuardService : Service() {
                 refreshNotification()
                 YangshipinGuide.run(this@IdleGuardService) { desc ->
                     when {
-                        desc.contains("已在CCTV1") -> {
-                            Logger.log(this@IdleGuardService, "央视频引导 → 已到达CCTV1,休眠")
+                        desc.contains("已在CCTV6") -> {
+                            Logger.log(this@IdleGuardService, "央视频引导 → 已到达CCTV6,休眠")
                             cctvSessionActive = false
                         }
                         !desc.startsWith("等待") -> Logger.log(this@IdleGuardService, "央视频引导 → $desc")
