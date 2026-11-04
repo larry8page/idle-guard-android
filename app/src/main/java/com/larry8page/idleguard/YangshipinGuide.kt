@@ -49,9 +49,13 @@ object YangshipinGuide {
         // 1) already on CCTV6 → nothing to do.
         if (svc.hasNodeText(CCTV6_PAGE)) { onDone("已在CCTV6,无需引导"); return }
 
-        // 2) grid open and CCTV6 cell visible → select it.
+        // 2) grid open and CCTV6 cell visible → 选中 CCTV6(开始播放), 再点"收起"折叠网格, 然后不再操作。
         if (svc.clickNodeByText(CCTV6_CELL)) {
-            h.postDelayed({ onDone("选CCTV6(网格)") }, 1200); return
+            h.postDelayed({
+                svc.clickNodeByText(listOf("收起"))
+                onDone("已在CCTV6(选台+收起网格)")
+            }, 1200)
+            return
         }
 
         // 3) grid open (收起 present) but CCTV6 not visible → ensure CCTV tab, scroll up.
