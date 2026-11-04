@@ -38,8 +38,9 @@ class IdleGuardService : Service() {
     private var lastResetLogMs: Long = 0L
     private var asleepSinceMs: Long = 0L
     // 央视频"冷启动单次引导"会话状态(见 pollRunnable):
-    // 只有从"非央视频 → 央视频"的那一次冷启动才开一个窗口,窗口内跳广告并导航到
-    // CCTV6,到达 CCTV6 后收起频道网格(或超过 CCTV_AD_WINDOW_MS)即休眠,期间不反复刷日志/干预。
+    // 只有从"非央视频 → 央视频"的那一次冷启动才开一个窗口,窗口内主动跳过开屏广告,
+    // 再按坐标点底部「电视」导航到 CCTV 电视页(CCTV-6 默认在播),到位即休眠不再干预;
+    // 全屏由用户把手机横过来触发。videolite 首页无 a11y 节点, 故导航用坐标。
     private var wasCctvForeground = false
     @Volatile private var cctvSessionActive = false
     private var cctvSessionStartMs = 0L
@@ -374,7 +375,7 @@ class IdleGuardService : Service() {
                     cctvSessionStartMs = SystemClock.elapsedRealtime()
                     Logger.log(
                         this@IdleGuardService,
-                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV6并收起频道网格后休眠"
+                        "央视频冷启动 → 引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,跳过开屏广告并进电视页(CCTV-6在播)后休眠"
                     )
                 }
                 wasCctvForeground = isCctv

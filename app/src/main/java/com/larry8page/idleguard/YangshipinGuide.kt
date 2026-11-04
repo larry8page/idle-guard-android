@@ -2,92 +2,56 @@ package com.larry8page.idleguard
 
 import android.content.Context
 import android.content.res.Configuration
-import android.os.Handler
-import android.os.Looper
 
 /**
  * Whitelist behavior for 央视频 (com.cctv.yangshipin.app.androidp).
  *
- * Goal: when 央视频 is the foreground app (idle trigger OR the 10s foreground
- * poll), drive it to CCTV6 live — WITHOUT ever blind-tapping coordinates. Once
- * CCTV6 is playing, collapse the expanded channel grid (tap "收起") and then do
- * nothing more.
+ * Goal: on cold-start, actively dismiss the opening ad, then land on the CCTV 电视
+ * page where CCTV-6 (电影) is already playing by default, and STOP there. Fullscreen
+ * is left to the user turning the phone sideways (the app auto-fullscreens on
+ * rotation); the guide does NOT try to tap the transient fullscreen button.
  *
- * Design: a SELF-CORRECTING STATE MACHINE. Each 10s tick performs only the ONE
- * next action that matches the current screen state, then returns. This avoids a
- * rigid multi-step chain (whose timing desyncs if any single step's page hasn't
- * rendered yet, and whose half-finished state then confuses the next tick).
+ * Design: a SELF-CORRECTING state machine. Each poll tick performs only the ONE
+ * next action matching the current screen, then returns.
  *
- * On-device constraints (TCL T803H / Freeme ROM):
- *  - AccessibilityService.windows returns an EMPTY list here, so node search uses
- *    rootInActiveWindow (see IdleAccessibilityService.candidateRoots()).
- *  - Splash/interstitial ads are SurfaceView-drawn: no node, and the "跳过" position
- *    VARIES per ad → we NEVER tap coordinates; a node-less ad is left to auto-dismiss
- *    and retried on the next tick.
- *  - The home channel strip is self-drawn inside a horizontal ViewPager: a synthetic
- *    horizontal swipe is swallowed → CCTV6 is reached via the "展开全部频道" grid,
- *    whose cells are real nodes.
+ * On-device constraints (this TCL T803H / Freeme ROM, current 央视频 build):
+ *  - 央视频 now opens into a Tencent videolite home (com.tencent.videolite.android.ui
+ *    .HomeActivity) whose accessibility tree is EMPTY (uiautomator dump = 0 nodes).
+ *    So the classic CCTV "电视" bottom-nav can't be found by text → we tap it by
+ *    COORDINATE (see TV_TAB_FX/TV_TAB_FY).
+ *  - The opening splash ad usually DOES expose a "跳过"/"关闭" node → we still skip it
+ *    actively via node click (not just waiting it out).
+ *  - CCTV-6 is the remembered/default live channel on the 电视 page, so no channel
+ *    selection is needed.
  */
 object YangshipinGuide {
     const val PKG = "com.cctv.yangshipin.app.androidp"
 
-    private val CCTV6_PAGE = listOf("CCTV-6栏目", "CCTV6栏目")
-    // CCTV6 是电影频道, 央视频"展开全部频道"网格里单元格用中文名"电影频道";
-    // 同时兼容可能的 "CCTV-6"/"CCTV6" 显示变体(找不到即静默跳过)。
-    private val CCTV6_CELL = listOf("电影频道", "CCTV-6", "CCTV6")
+    // 底部导航「电视」的位置(比例, 适配不同分辨率)。TCL 1080x2460 实测约 (300,2230)。
+    private const val TV_TAB_FX = 0.278f
+    private const val TV_TAB_FY = 0.907f
 
     fun run(ctx: Context, onDone: (String) -> Unit) {
         val svc = IdleAccessibilityService.instance
         if (svc == null) {
-            onDone("无障碍未连接,跳过")
+            onDone("等待(无障碍未连接)")
             return
         }
         val app = ctx.applicationContext
-        val h = Handler(Looper.getMainLooper())
 
-        // 0) exit fullscreen if landscape.
+        // 0) 已横屏 = 用户已把手机横过来全屏 → 不再做任何操作。
         if (app.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            if (svc.pressBack()) { onDone("横屏→BACK退全屏"); return }
-        }
-
-        // 1) CCTV6 已播出 → 收尾: 若频道网格仍处于展开态, 点"收起"折叠, 然后不再做任何操作。
-        if (svc.hasNodeText(CCTV6_PAGE)) {
-            if (svc.clickNodeByText(listOf("收起"))) {
-                // 描述含"已在CCTV6", 调用方据此结束引导会话, 后续不再干预。
-                h.postDelayed({ onDone("已在CCTV6 → 收起频道网格") }, 600)
-            } else {
-                onDone("已在CCTV6,无需引导")
-            }
+            onDone("已在CCTV6(横屏全屏)")
             return
         }
 
-        // 2) grid open and CCTV6 cell visible → select it.
-        if (svc.clickNodeByText(CCTV6_CELL)) {
-            h.postDelayed({ onDone("选CCTV6(网格)") }, 1200); return
-        }
-
-        // 3) grid open (收起 present) but CCTV6 not visible → ensure CCTV tab, scroll up.
-        if (svc.hasNodeText(listOf("收起"))) {
-            svc.clickNodeByText(listOf("CCTV"))
-            svc.swipeRel(0.5f, 0.5f, 0.5f, 0.85f, 400L)
-            h.postDelayed({ onDone("网格:确保CCTV页签+上滚找CCTV6") }, 800); return
-        }
-
-        // 4) on the TV page → open the 展开全部频道 grid.
-        if (svc.clickNodeByText(listOf("展开全部频道"))) {
-            h.postDelayed({ onDone("展开网格") }, 1000); return
-        }
-
-        // 5) on home (bottom nav present) → go to the TV page.
-        if (svc.clickNodeByText(listOf("电视"), bottomOnly = true)) {
-            h.postDelayed({ onDone("进电视页") }, 1000); return
-        }
-
-        // 6) ad overlays that DO expose a node → dismiss them.
+        // 1) 主动去开屏广告: 有"跳过/关闭"节点就点掉(不靠干等)。
         if (svc.clickNodeByText(listOf("跳过"))) { onDone("跳过(节点)"); return }
         if (svc.clickNodeByText(listOf("关闭"))) { onDone("关弹窗(节点)"); return }
 
-        // otherwise: node-less ad still up, or a page not ready → wait, retry next tick.
-        onDone("等待(广告自动消失或页面未就绪)")
+        // 2) 进 CCTV 电视页(CCTV-6 默认就在播)。videolite 首页无节点, 用坐标点底部「电视」导航。
+        //    点一次即视为到位 → 结束引导会话, 之后不再干预(全屏交给用户横屏)。
+        svc.tapRel(TV_TAB_FX, TV_TAB_FY)
+        onDone("已在CCTV6(点电视导航)")
     }
 }
