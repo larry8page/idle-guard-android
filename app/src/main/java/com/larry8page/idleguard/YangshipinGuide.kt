@@ -2,6 +2,8 @@ package com.larry8page.idleguard
 
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Whitelist behavior for 央视频 (com.cctv.yangshipin.app.androidp).
@@ -30,6 +32,10 @@ object YangshipinGuide {
     // 底部导航「电视」的位置(比例, 适配不同分辨率)。TCL 1080x2460 实测约 (300,2230)。
     private const val TV_TAB_FX = 0.278f
     private const val TV_TAB_FY = 0.907f
+    // 开屏/插屏广告的 ✕ 关闭按钮位置(比例)。这版广告自绘无节点, 只能坐标点;
+    // 实测本条广告 ✕ 约 (540,2080)。不同广告 ✕ 位置会变, 属尽力而为。
+    private const val AD_CLOSE_FX = 0.5f
+    private const val AD_CLOSE_FY = 0.845f
 
     fun run(ctx: Context, onDone: (String) -> Unit) {
         val svc = IdleAccessibilityService.instance
@@ -38,6 +44,7 @@ object YangshipinGuide {
             return
         }
         val app = ctx.applicationContext
+        val h = Handler(Looper.getMainLooper())
 
         // 0) 已横屏 = 用户已把手机横过来全屏 → 不再做任何操作。
         if (app.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -49,9 +56,12 @@ object YangshipinGuide {
         if (svc.clickNodeByText(listOf("跳过"))) { onDone("跳过(节点)"); return }
         if (svc.clickNodeByText(listOf("关闭"))) { onDone("关弹窗(节点)"); return }
 
-        // 2) 进 CCTV 电视页(CCTV-6 默认就在播)。videolite 首页无节点, 用坐标点底部「电视」导航。
-        //    点一次即视为到位 → 结束引导会话, 之后不再干预(全屏交给用户横屏)。
-        svc.tapRel(TV_TAB_FX, TV_TAB_FY)
-        onDone("已在CCTV6(点电视导航)")
+        // 2) 这版广告自绘、无节点 → 坐标点 ✕ 尽力关掉; 等广告收起后再坐标点底部「电视」
+        //    进 CCTV 电视页(CCTV-6 默认在播)。到位即完成, 结束会话不再干预(全屏由用户横屏)。
+        svc.tapRel(AD_CLOSE_FX, AD_CLOSE_FY)
+        h.postDelayed({
+            svc.tapRel(TV_TAB_FX, TV_TAB_FY)
+            onDone("已在CCTV6(关广告+点电视)")
+        }, 800)
     }
 }
