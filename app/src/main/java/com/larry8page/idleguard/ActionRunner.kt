@@ -14,7 +14,8 @@ import android.os.Looper
  *
  *  leaveApp()       — 先连按「返回」最多 3 次(GLOBAL_ACTION_BACK, 每下间隔约400ms),
  *                     每下之后复查目标是否还在前台,一旦退出即结束(不再 HOME, 避开视频
- *                     App 的悬浮小窗);按满 3 次仍未退才兜底 HOME。
+ *                     App 的悬浮小窗);按满 3 次仍未退才兜底 HOME。特例:央视频若 3 次返回
+ *                     后仍在前台则跳过 HOME(否则会弹出悬浮小窗),由调用方直接强杀。
  *  goHome()         — HOME via AccessibilityService.
  *  killForeground() — kill the identified app, best available path:
  *                       1. device owner            → setApplicationHidden(true)
@@ -80,8 +81,14 @@ object ActionRunner {
                     return
                 }
                 if (backs >= BACK_MAX) {
-                    goHome(app)
-                    onDone("BACK×${backs}未退出,已HOME兜底")
+                    if (target != null && target == YangshipinGuide.PKG) {
+                        // 央视频连按 3 次返回仍未退出:不按 HOME(它会弹出悬浮小窗),
+                        // 交给调用方立即强杀。
+                        onDone("央视频×${backs}返回未退,待强杀")
+                    } else {
+                        goHome(app)
+                        onDone("BACK×${backs}未退出,已HOME兜底")
+                    }
                     return
                 }
                 if (back()) backs++

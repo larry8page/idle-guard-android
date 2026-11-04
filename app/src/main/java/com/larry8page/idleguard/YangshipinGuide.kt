@@ -9,7 +9,9 @@ import android.os.Looper
  * Whitelist behavior for 央视频 (com.cctv.yangshipin.app.androidp).
  *
  * Goal: when 央视频 is the foreground app (idle trigger OR the 10s foreground
- * poll), drive it to CCTV6 live — WITHOUT ever blind-tapping coordinates.
+ * poll), drive it to CCTV6 live — WITHOUT ever blind-tapping coordinates. Once
+ * CCTV6 is playing, collapse the expanded channel grid (tap "收起") and then do
+ * nothing more.
  *
  * Design: a SELF-CORRECTING STATE MACHINE. Each 10s tick performs only the ONE
  * next action that matches the current screen state, then returns. This avoids a
@@ -48,8 +50,16 @@ object YangshipinGuide {
             if (svc.pressBack()) { onDone("横屏→BACK退全屏"); return }
         }
 
-        // 1) already on CCTV6 → nothing to do.
-        if (svc.hasNodeText(CCTV6_PAGE)) { onDone("已在CCTV6,无需引导"); return }
+        // 1) CCTV6 已播出 → 收尾: 若频道网格仍处于展开态, 点"收起"折叠, 然后不再做任何操作。
+        if (svc.hasNodeText(CCTV6_PAGE)) {
+            if (svc.clickNodeByText(listOf("收起"))) {
+                // 描述含"已在CCTV6", 调用方据此结束引导会话, 后续不再干预。
+                h.postDelayed({ onDone("已在CCTV6 → 收起频道网格") }, 600)
+            } else {
+                onDone("已在CCTV6,无需引导")
+            }
+            return
+        }
 
         // 2) grid open and CCTV6 cell visible → select it.
         if (svc.clickNodeByText(CCTV6_CELL)) {

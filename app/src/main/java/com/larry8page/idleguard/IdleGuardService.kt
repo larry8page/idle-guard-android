@@ -39,7 +39,7 @@ class IdleGuardService : Service() {
     private var asleepSinceMs: Long = 0L
     // 央视频"冷启动单次引导"会话状态(见 pollRunnable):
     // 只有从"非央视频 → 央视频"的那一次冷启动才开一个窗口,窗口内跳广告并导航到
-    // CCTV6,到达 CCTV6 或超过 CCTV_AD_WINDOW_MS 即休眠,期间不反复刷日志/干预。
+    // CCTV6,到达 CCTV6 后收起频道网格(或超过 CCTV_AD_WINDOW_MS)即休眠,期间不反复刷日志/干预。
     private var wasCctvForeground = false
     @Volatile private var cctvSessionActive = false
     private var cctvSessionStartMs = 0L
@@ -208,10 +208,16 @@ class IdleGuardService : Service() {
 
     private fun beginExitAndKill() {
         val pkg = loadPendingPkg()
+        val wasCctv = pkg == YangshipinGuide.PKG
         ActionRunner.muteNow(this)
         ActionRunner.leaveApp(this, pkg) { desc ->
             val cd = SettingsStore.countdownMillis(this)
-            if (cd <= 0L) {
+            // 央视频:连按返回后仍在前台 → 直接强杀(忽略关闭倒计时,也不靠 HOME 兜底)。
+            val cctvStillUp = wasCctv && CurrentApp.pkg(this) == YangshipinGuide.PKG
+            if (cctvStillUp) {
+                Logger.log(this, "触发执行 → $desc  (央视频返回未退 → 立即强杀)")
+                killAndLock(pkg)
+            } else if (cd <= 0L) {
                 Logger.log(this, "触发执行 → $desc  (前台=${pkg ?: "未知"})")
                 killAndLock(pkg)
             } else {
@@ -368,7 +374,7 @@ class IdleGuardService : Service() {
                     cctvSessionStartMs = SystemClock.elapsedRealtime()
                     Logger.log(
                         this@IdleGuardService,
-                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV6后休眠"
+                        "央视频冷启动 → 开屏广告引导窗口 ${CCTV_AD_WINDOW_MS / 1000}s,到CCTV6并收起频道网格后休眠"
                     )
                 }
                 wasCctvForeground = isCctv
