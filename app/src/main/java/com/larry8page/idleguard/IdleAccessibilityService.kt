@@ -54,7 +54,10 @@ class IdleAccessibilityService : AccessibilityService() {
         val ev = event ?: return
         when (ev.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
-            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED ->
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_SELECTED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ->
                 IdleGuardService.instance?.onUserActivity()
         }
     }
